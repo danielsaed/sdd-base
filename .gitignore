@@ -1,0 +1,13 @@
+# Secrets: NEVER commit
+.env
+.env.*
+!.env.example
+
+# Feature working folders (scripts/worktree.sh): a copy of the repo on its branch.
+.worktrees/
+/.port
+
+# Dependencies / caches
+node_modules/
+__pycache__/
+.DS_Store

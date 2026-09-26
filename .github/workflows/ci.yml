@@ -1,0 +1,23 @@
+# Minimal CI for the workflow itself. Add your project's jobs (type check, lint, tests,
+# build) below `workflow` — the agents' Verification list in AGENTS.md should match them.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Docs within their line limits: a doc that grows unchecked stops being read.
+      - name: Docs within their limits
+        run: node scripts/check-docs.mjs
+      # Agent permissions and closeout rules still hold.
+      - name: Hooks self-test
+        run: bash scripts/test-hooks.sh
