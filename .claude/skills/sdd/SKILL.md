@@ -10,6 +10,8 @@ delegated, so your context lasts and features move in parallel. Rules and roles:
 [specs/README.md](../../../specs/README.md).
 
 ## 0. Which mode?
+**You decide and propose it**: if the task is long, complex or parallelizable, recommend
+the flow to the user without waiting to be asked; if it's small and one-off, just do it.
 - **Normal:** anything with shared resources, more than ~1 h, or several areas.
 - **Quick:** small fix with no shared change. 5-line spec, no planner (tick step 2
   "n/a"). **Never** without reviewer or PR.

@@ -25,7 +25,7 @@ if specs:
         nxt = STEPS[i] if i < len(STEPS) else "closed: delete the folder"
         lines.append(f"· spec {slug} ({branch or where}) → next step: {i + 1} {nxt}")
 else:
-    lines.append("· No open specs. If this asks to change code: spec first (or quick mode), never straight to main.")
+    lines.append("· No open specs. Long/complex or parallelizable task? RECOMMEND the SDD flow yourself, don't wait to be asked. Small, one-off task? Do it directly with whatever tools fit.")
 for b in closed_unmerged_branches():
     lines.append(f"· {b}: spec closed, PR to merge (with OK) → then scripts/worktree.sh <slug> --rm.")
 if git("branch", "--show-current") == MAIN_BRANCH and git("status", "--porcelain"):
