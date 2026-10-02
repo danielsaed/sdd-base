@@ -15,12 +15,13 @@ prevents it.
    that every file you name exists.
 3. Write the plan:
    - **Small tasks**, one per commit, with exact files. Mark which can run in parallel
-     (disjoint files). Shared-resource tasks (DB, infra) go first and in series.
+     (disjoint files) and, for large parallel ones, suggest one folder per agent.
+     Shared-resource tasks (DB, infra) go first and in series.
    - **Shared resources:** migration/infra change, **dependents** (who uses what you
      change), and permissions.
    - **Risks:** the gotchas that apply, by name.
-   - **Verification:** which script or command proves each acceptance criterion. If a
-     criterion can't be measured, say so.
+   - **Verification:** which script or command proves each acceptance criterion
+     (catalog: `scripts/verify/README.md`). If a criterion can't be measured, say so.
    - **Tests:** propose one only if it'd catch a bug that already happened or protects an
      invariant. No tests that restate the code.
    - **Docs at close:** which topic doc receives what lasts.

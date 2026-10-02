@@ -15,6 +15,8 @@ TODO: background and how explanations should be pitched. Language for communicat
 **Every answer ends with a "Status" block** (3 lines: *Running* · *Pending* · *Need from
 you*): during long features the user only reads the last message. Anything left running
 is watched with a completion notice (never "waiting for you to write").
+**"Need from you" is self-contained**: full steps, where and what to copy; never "step 3"
+or "as above". Whatever the user must read goes in that last message, even if said earlier.
 
 ## Stack
 TODO: languages, frameworks, database, hosting — and where the "why" lives
@@ -24,8 +26,10 @@ TODO: languages, frameworks, database, hosting — and where the "why" lives
 ```
 specs/                # features IN PROGRESS + BACKLOG.md (the only pending list)
 docs/                 # living docs (map below)
-scripts/              # check-docs.mjs, worktree.sh (+ your verification scripts)
+scripts/              # check-docs.mjs, worktree.sh, baseline.sh, test-hooks.sh
+scripts/verify/       # reusable checks + their catalog (README.md), guard self-test
 .claude/agents|hooks|skills   # permissioned agents, workflow hooks, skills
+.claude/permissions.json      # what each subagent may do (read by the guard hook)
 TODO: your source folders
 ```
 
@@ -48,7 +52,8 @@ Orchestrator manual: skill `sdd`. The hooks remind the current step on every mes
 
 ## How to run
 TODO: dev server (in a feature folder use the port in `.port`), database access,
-environment files.
+environment files, and the command that re-syncs dependencies after a merge that changed
+a lockfile (e.g. `npm ci`, `uv sync`).
 
 ## Verification (after ANY change)
 TODO: adapt to your stack. The agents run exactly this list.
@@ -73,6 +78,7 @@ goes over, **compact it**; only the user raises a limit.
 | `docs/STATUS.md` | what exists today and where · work log (7). In progress = open specs |
 | `specs/BACKLOG.md` | the only list of pending work |
 | `specs/NNN-*/` | one feature in progress (deleted at close) |
+| `scripts/verify/README.md` | which check measures what, and when to use it |
 | TODO: `docs/*.md` | one doc per subsystem / decision area |
 
 - Docs are updated **in the same PR** as the code.

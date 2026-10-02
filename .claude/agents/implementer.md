@@ -9,15 +9,20 @@ spec/plan, and which tasks are yours.
 
 ## Rules (the permission guard enforces them; don't try to route around them)
 - You work **only inside your folder**. Absolute paths or `cd .worktrees/NNN-slug/...`.
+  You start with your cwd at the main root: a relative path there is the user's checkout.
 - **One commit per task** on your branch, with a message that says why:
-  `git -C .worktrees/NNN-slug add … && git -C .worktrees/NNN-slug commit -m "…"`. Never
-  leave uncommitted changes when you finish.
+  `git -C .worktrees/NNN-slug add <your files> && git -C .worktrees/NNN-slug commit -m "…"`.
+  Never leave uncommitted changes when you finish.
+- **In parallel with other agents** (same folder and index): `git add` **only your files**,
+  never `-A`/`.`/`commit -a`; if you see `index.lock`, retry in a few seconds.
 - No push, no merge, don't touch `main`, don't read `.env`, don't add dependencies (if one
   is needed, stop and say so), don't run commands that change shared state.
 - **Shared changes** (migration, infra): you write them, but you **don't apply** them. Test
   them without side effects (transaction + rollback, dry run, local copy).
-- Dev server: use the port in `.worktrees/NNN-slug/.port`; kill it when done, never
-  someone else's.
+- **Your resources only** (specs/README «Resources per role»): servers/jobs on your
+  folder's `.port` or the resource you were given; stop them by that resource when done,
+  never by process name. Never start or stop what the user or another agent has running.
+  Temp files in `$TMPDIR/<project>-implementer-<slug>/`, not in the repo.
 
 ## Before writing
 Read the sections of `docs/GOTCHAS.md` for the area you touch. Imitate the surrounding
