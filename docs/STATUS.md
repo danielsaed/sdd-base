@@ -1,22 +1,18 @@
 # Status
 
-> **Answers:** what exists today and where (1-3 lines per feature; detail in its topic
-> doc), plus the thread of the last 7 work sessions. **Update when:** a feature is born,
-> changes or dies (in the same PR). Pending work does NOT go here: it goes to
-> [specs/BACKLOG.md](../specs/BACKLOG.md). What's in progress = the open specs
-> (`.worktrees/*/specs/`), which the reminder hook shows on every message.
+> **Answers:** what exists today and where, area by area (1-3 lines each; detail in the
+> area's README). **Update when:** a feature or an area is born, changes or dies (in the
+> same PR). Pending work does NOT go here: it goes to its area's **Pending** section
+> (cross-area order: [areas/BACKLOG.md](../areas/BACKLOG.md)). What was done and when:
+> [areas/HISTORY.md](../areas/HISTORY.md). What's in progress = the open specs
+> (`areas/*/open/`, on their branches in `.worktrees/`), which the reminder hook shows on
+> every message.
 
 **In one sentence:** …
 
-## What exists
+## Areas
 
 | Area | What's there | Detail |
 |---|---|---|
+| workflow | the agent workflow: roles, permission guard, hooks, feature folders | [areas/workflow](../areas/workflow/README.md) |
 | … | … | — |
-
-## Work log (last 7 sessions)
-
-> On closing a session with significant changes, one bullet at the TOP (max 2 lines:
-> what and why, with the PR if any) and delete the last one. Details are in git.
-
-- **Project bootstrapped** from `sdd-base`.
