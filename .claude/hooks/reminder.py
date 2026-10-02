@@ -27,11 +27,16 @@ if specs:
 else:
     lines.append("· No open specs. Long/complex or parallelizable task? RECOMMEND the SDD flow yourself, don't wait to be asked. Small, one-off task? Do it directly with whatever tools fit.")
 for b in closed_unmerged_branches():
-    lines.append(f"· {b}: spec closed, PR to merge (with OK) → then scripts/worktree.sh <slug> --rm.")
+    # A docs/… branch never had a spec (docs mode): not a closed spec, but its PR also needs the OK.
+    if b.startswith("docs/"):
+        lines.append(f"· {b}: docs mode, PR to merge (with OK) → then scripts/worktree.sh docs-{b[5:]} --rm.")
+    else:
+        lines.append(f"· {b}: spec closed, PR to merge (with OK) → then scripts/worktree.sh <slug> --rm.")
 if git("branch", "--show-current") == MAIN_BRANCH and git("status", "--porcelain"):
-    lines.append(f"· ⚠ Uncommitted changes on {MAIN_BRANCH}: everything goes through a feat/NNN branch + PR.")
+    lines.append(f"· ⚠ Uncommitted changes on {MAIN_BRANCH}: everything goes through a feat/NNN (or docs/<topic>) branch + PR.")
 lines += [
     "· You orchestrate: planner (plan) → implementer (code, in .worktrees/) → reviewer (verify). Don't code what you can delegate.",
+    "· Docs mode: ONLY docs change → branch docs/<topic> (scripts/worktree.sh docs-<topic>) + PR + CI, no spec or reviewer.",
     "· User OK needed for: the spec, applying shared changes (DB/infra) and merging the PR. Shared changes one feature at a time.",
     "· Tests only if they catch a real bug or an invariant, with a mutation check. Feature verification → reusable scripts.",
     "· End EVERY answer with «Status»: Running (what's still going) · Pending · Need from you (or «nothing»).",

@@ -29,7 +29,7 @@ if git("branch", "--show-current") == MAIN_BRANCH:
     dirty = git("status", "--porcelain")
     if dirty:
         reasons.append(f"UNCOMMITTED changes on {MAIN_BRANCH}:\n" + dirty[:400]
-                       + "\n→ move them to a feat/NNN-slug branch (git switch -c) and open a PR.")
+                       + "\n→ move them to a feat/NNN-slug (or docs/<topic>) branch (git switch -c) and open a PR.")
 
 for slug, where, checks, branch in open_specs():
     if len(checks) >= 5 and checks[3] and not checks[4]:
