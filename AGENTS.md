@@ -1,7 +1,7 @@
 # <Project name> — project context
 
 > **Entry point for ANY agent/AI/editor** (`AGENTS.md` standard; `CLAUDE.md` just points
-> here). All context lives **in the repo** —this file, `docs/`, `specs/` and the code—,
+> here). All context lives **in the repo** —this file, `docs/`, `areas/` and the code—,
 > never in a tool's memory. Invariants only: no dated entries (that's git).
 > **Limit: 150 lines** (`scripts/check-docs.mjs`).
 >
@@ -24,8 +24,9 @@ TODO: languages, frameworks, database, hosting — and where the "why" lives
 
 ## Repo layout
 ```
-specs/                # features IN PROGRESS + BACKLOG.md (the only pending list)
-docs/                 # living docs (map below)
+areas/<area>/         # one subsystem: README (how it works · gotchas · pending), open/ specs, done/
+areas/                # README.md (how areas/specs work), BACKLOG.md (what's next), HISTORY.md
+docs/                 # only what ANY task needs (map below)
 scripts/              # check-docs.mjs, worktree.sh, baseline.sh, test-hooks.sh
 scripts/verify/       # reusable checks + their catalog (README.md), guard self-test
 .claude/agents|hooks|skills   # permissioned agents, workflow hooks, skills
@@ -33,22 +34,24 @@ scripts/verify/       # reusable checks + their catalog (README.md), guard self-
 TODO: your source folders
 ```
 
-## How we work (SDD flow, detail in [specs/README.md](specs/README.md))
-**One feature = one spec = one branch `feat/NNN-slug` = one PR.** The main session is the
-**orchestrator**: writes the spec, asks for the OK and delegates; it doesn't code what it
-can delegate.
+## How we work (SDD flow, detail in [areas/README.md](areas/README.md))
+**One feature = one spec = one branch `feat/<area>-<slug>` = one PR.** No numbers: a spec
+is `<area>/<slug>`. The main session is the **orchestrator**: writes the spec, asks for
+the OK and delegates; it doesn't code what it can delegate.
 
-1. **Spec** (`specs/NNN-slug/spec.md` from `specs/_template/`) → **user OK**.
+1. **Spec** (`areas/<area>/open/<slug>/spec.md` from `areas/_template/`) → **user OK**.
 2. **Plan**: `planner` agent (read-only; writes `plan.md`).
 3. **Code**: `implementer` agent(s), each in its own folder (`scripts/worktree.sh`).
 4. **Verify**: `reviewer` agent (no edits) against the spec's criteria.
-5. **Close**: docs + delete the spec folder → PR with green CI → merge (with OK).
+5. **Close**: area README + spec → `done/` + HISTORY line → PR with green CI → merge (with OK).
 
 Hard rules: shared resources (single DB, infra) are **not** parallelized; only the
-orchestrator applies shared changes, with OK; nothing reaches `main` without a PR.
+orchestrator applies shared changes, with OK; nothing reaches `main` without a PR;
+creating, splitting or merging an area needs the user's OK.
 Orchestrator manual: skill `sdd`. The hooks remind the current step on every message.
 
-> **Before touching an area**, read its section of [docs/GOTCHAS.md](docs/GOTCHAS.md).
+> **Before touching an area**, read its README (`areas/<area>/README.md`, above all
+> «Gotchas») and [docs/GOTCHAS.md](docs/GOTCHAS.md).
 
 ## How to run
 TODO: dev server (in a feature folder use the port in `.port`), database access,
@@ -74,13 +77,19 @@ goes over, **compact it**; only the user raises a limit.
 | Doc | Answers |
 |---|---|
 | `AGENTS.md` | invariants: what it is, stack, flow, rules |
-| `docs/GOTCHAS.md` | stack traps that already bit us |
-| `docs/STATUS.md` | what exists today and where · work log (7). In progress = open specs |
-| `specs/BACKLOG.md` | the only list of pending work |
-| `specs/NNN-*/` | one feature in progress (deleted at close) |
+| `docs/GOTCHAS.md` | traps of the whole stack that already bit us |
+| `docs/STATUS.md` | what exists today and where, area by area. In progress = open specs |
+| TODO: `docs/*.md` | only what ANY task needs (e.g. ARCHITECTURE, CONVENTIONS) |
+| `areas/README.md` | the flow, modes, areas (when to create one), spec lifecycle |
+| `areas/<area>/README.md` | how that subsystem works · its gotchas · its pending work |
+| `areas/<area>/open/<slug>/` | one feature in progress (spec + plan) |
+| `areas/<area>/done/` | the area's 3 most recent closed specs (older: git history) |
+| `areas/BACKLOG.md` | what's next, ordered across areas (detail in each area's Pending) |
+| `areas/HISTORY.md` | one line per closed spec or docs PR, newest first |
+| `areas/workflow/README.md` | roles, permissions, guard, resources per role |
 | `scripts/verify/README.md` | which check measures what, and when to use it |
-| TODO: `docs/*.md` | one doc per subsystem / decision area |
 
 - Docs are updated **in the same PR** as the code.
-- Every doc in `docs/` starts with *what it answers* and *when to update it*.
+- Every doc in `docs/` and every area README starts with *what it answers* and *when to
+  update it*.
 - If a fact stops being true, fix it or DELETE it; never keep it "just in case".

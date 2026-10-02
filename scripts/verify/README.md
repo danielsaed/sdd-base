@@ -9,8 +9,8 @@ Run them from the root or from a feature folder.
 - Exit **0** all good · **1** something fails · **2** the check couldn't be set up. Never
   skip a case silently and report green ([docs/GOTCHAS.md](../../docs/GOTCHAS.md)).
 - Side effects only on your role's reserved resources and temp folders
-  ([specs/README.md](../../specs/README.md#resources-per-role)); shared state only with
-  rollback or a dry run.
+  ([areas/workflow/README.md](../../areas/workflow/README.md#resources-per-role)); shared
+  state only with rollback or a dry run.
 - A feature's verification goes here as a reusable script, not as a new test.
 
 ## Workflow
@@ -21,8 +21,12 @@ Run them from the root or from a feature folder.
   `python3 scripts/verify/guard_selftest.py [--no-mutation] [-v]` · before changing rules,
   old vs new over real commands: `--corpus cmds.jsonl --old <agent_guard.py> --old-root <root> --out f.txt`.
   The guard that applies is the main checkout's: a branch's is measured by running its hook by path.
-- **`../worktree.sh`** — feature folder: `NNN-slug` (branch `feat/…`, dependencies cloned,
-  `.port`) · `docs-topic` (branch `docs/…`, no port) · `… --rm`. Links the shared files.
+- **`../test-hooks.sh`** — the guard self-test plus, in a throwaway copy of the repo, the
+  reminder and closeout hooks and `worktree.sh` over the areas layout (open spec, steps,
+  close moved vs deleted, HISTORY, >3 done, >15 areas). Runs in CI. `bash scripts/test-hooks.sh`.
+- **`../worktree.sh`** — feature folder: `<area>-<slug>` (branch `feat/…`, the area must
+  exist, dependencies cloned, `.port` from a hash of the name) · `--new-area <area>` ·
+  `docs-topic` (branch `docs/…`, no port) · `… --rm`. Links the shared files.
 - **`../baseline.sh`** — disposable worktree of `main` in a temp folder, to compare
   before/after without touching the main checkout. `scripts/baseline.sh` · `--rm`.
 

@@ -24,8 +24,12 @@ It's stack-agnostic: you plug in your own verification commands.
 - **The orchestrator doesn't forget the rules in long sessions.** A hook re-injects the
   flow and each open spec's current step on every message, and another won't let a turn
   end with a verified-but-unclosed spec or a skipped step.
-- **Docs stay small and current.** Line limits per doc, checked in CI. Specs are deleted
-  when closed (git keeps them), so `specs/` never piles up.
+- **Docs live next to their work.** Each subsystem is an *area* folder: how it works, its
+  traps, its pending work, its open specs and its last closed ones. Specs are named
+  `<area>/<slug>`, never numbered, so reordering a plan of ten specs renumbers nothing.
+- **Closed specs aren't lost, nor piled up.** A closed spec moves to its area's `done/`
+  (the last 3 stay; older ones remain in `main`'s history, even with squash merges), and
+  `areas/HISTORY.md` keeps one line per spec. Line limits per doc, checked in CI.
 - **Tests that earn their place.** Only tests that catch a bug that already happened or
   protect an invariant, with a mutation check.
 
@@ -39,26 +43,27 @@ idea ─► 1 SPEC ─► ⏸ OK ─► 2 PLAN ─► 3 CODE ─► 4 VERIFY ─
                                         └──── ✗ ─────┘
 ```
 
-Details: [specs/README.md](specs/README.md) · orchestrator manual:
+Details: [areas/README.md](areas/README.md) · orchestrator manual:
 [.claude/skills/sdd/SKILL.md](.claude/skills/sdd/SKILL.md).
 
 ## What's inside
 
 ```
 AGENTS.md · CLAUDE.md          project context template (CLAUDE.md → @AGENTS.md)
-specs/README.md                the flow, roles and permissions
-specs/BACKLOG.md               the only list of pending work
-specs/_template/               spec.md (with a 5-step checklist) and plan.md
-docs/STATUS.md · GOTCHAS.md    what exists today · traps that already bit you
+areas/README.md                the flow, modes, when to create an area, spec lifecycle
+areas/BACKLOG.md · HISTORY.md  what's next across areas · one line per closed spec
+areas/_template/               area README, spec.md (5-step checklist) and plan.md
+areas/workflow/                example area: roles, permissions, resources per role
+docs/STATUS.md · GOTCHAS.md    what exists today · stack-wide traps that already bit you
 .claude/agents/                planner, implementer, reviewer
 .claude/hooks/                 reminder (every message), closeout (end of turn),
                                agent_guard (per-agent permissions), sdd_state
 .claude/permissions.json       what each role may edit and run, with accepted risks
 .claude/settings.json          deny rules + hook registration
 .claude/skills/sdd/            the orchestrator's manual
-scripts/worktree.sh            isolated folder + branch + port per feature (or docs-<topic>)
+scripts/worktree.sh            isolated folder + branch + port per <area>-<slug> (or docs-<topic>)
 scripts/baseline.sh            disposable copy of main to compare before/after
-scripts/check-docs.mjs         doc line limits (CI)
+scripts/check-docs.mjs         doc line limits and at most 3 closed specs per area (CI)
 scripts/test-hooks.sh          self-test of the hooks (CI)
 scripts/verify/                guard self-test + catalog of your reusable checks
 ```
@@ -76,11 +81,13 @@ and the [GitHub CLI](https://cli.github.com/) (`gh auth login`).
    - `scripts/baseline.sh`: what runs in the copy of `main` (`run_baseline`);
    - `.claude/permissions.json`: your protected scripts (`protected`) and shared-state
      commands; then `python3 scripts/verify/guard_selftest.py`;
-   - `specs/README.md`: the «Resources per role» table;
+   - `areas/workflow/README.md`: the «Resources per role» table;
    - `scripts/check-docs.mjs`: line limits.
 4. Add your project's jobs to `.github/workflows/ci.yml`.
-5. Open Claude Code in the repo and ask for your first feature. It will write
-   `specs/001-…/spec.md` and wait for your OK.
+5. Create your first areas from `areas/_template/README.md` (one per subsystem; a few to
+   start, 8-15 once mature — rules in `areas/README.md`) and list them in `docs/STATUS.md`.
+6. Open Claude Code in the repo and ask for your first feature. It will write
+   `areas/<area>/open/<slug>/spec.md` and wait for your OK.
 
 Agents defined in `.claude/agents/` load when a session starts; hooks apply immediately.
 
