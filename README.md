@@ -14,8 +14,13 @@ It's stack-agnostic: you plug in your own verification commands.
 - **Nothing reaches `main` unverified.** An independent reviewer tries to prove each
   feature does *not* meet its spec, measuring with commands, not opinions.
 - **Permissions are enforced, not just written.** A hook knows which agent issues each
-  command: the reviewer can't edit, the planner only writes its plan, the implementer
-  can't push, merge, touch `main`, read `.env` or add dependencies.
+  command and judges what it *does* (through variables, `bash -c`, `$(…)`, symlinks…):
+  the reviewer can't edit, the planner only writes its plan, the implementer can't push,
+  merge, touch `main`, read `.env` or add dependencies. Rules live in one JSON file, each
+  with its why, and a self-test with mutation checks every rule in CI.
+- **Agents don't step on each other or on you.** One folder per feature (secrets linked,
+  not copied), `git add` only of your own files, reserved resources per role, and
+  comparisons against `main` in a disposable copy, never in your checkout.
 - **The orchestrator doesn't forget the rules in long sessions.** A hook re-injects the
   flow and each open spec's current step on every message, and another won't let a turn
   end with a verified-but-unclosed spec or a skipped step.
@@ -48,11 +53,14 @@ docs/STATUS.md · GOTCHAS.md    what exists today · traps that already bit you
 .claude/agents/                planner, implementer, reviewer
 .claude/hooks/                 reminder (every message), closeout (end of turn),
                                agent_guard (per-agent permissions), sdd_state
+.claude/permissions.json       what each role may edit and run, with accepted risks
 .claude/settings.json          deny rules + hook registration
 .claude/skills/sdd/            the orchestrator's manual
-scripts/worktree.sh            isolated folder + branch + port per feature
+scripts/worktree.sh            isolated folder + branch + port per feature (or docs-<topic>)
+scripts/baseline.sh            disposable copy of main to compare before/after
 scripts/check-docs.mjs         doc line limits (CI)
 scripts/test-hooks.sh          self-test of the hooks (CI)
+scripts/verify/                guard self-test + catalog of your reusable checks
 ```
 
 ## Getting started
@@ -64,8 +72,11 @@ and the [GitHub CLI](https://cli.github.com/) (`gh auth login`).
 2. Fill in every `TODO` in `AGENTS.md` — above all the **Verification** list: it's
    exactly what the implementer and reviewer run.
 3. Adjust the `CUSTOMIZE PER PROJECT` blocks:
-   - `scripts/worktree.sh`: env files to copy, dependency folders to clone, base port;
-   - `.claude/hooks/agent_guard.py`: commands that change shared state (DB, infra);
+   - `scripts/worktree.sh`: shared files to link, dependency folders to clone, base port;
+   - `scripts/baseline.sh`: what runs in the copy of `main` (`run_baseline`);
+   - `.claude/permissions.json`: your protected scripts (`protected`) and shared-state
+     commands; then `python3 scripts/verify/guard_selftest.py`;
+   - `specs/README.md`: the «Resources per role» table;
    - `scripts/check-docs.mjs`: line limits.
 4. Add your project's jobs to `.github/workflows/ci.yml`.
 5. Open Claude Code in the repo and ask for your first feature. It will write
@@ -75,8 +86,11 @@ Agents defined in `.claude/agents/` load when a session starts; hooks apply imme
 
 ## Known limits
 
-- An agent with a terminal could still write a script that does something forbidden;
-  the guard closes the obvious paths, not every possible one.
+- The guard stops mistakes by cooperative agents, not an attacker: an agent could still
+  write a script that does something forbidden. Known evasions are listed, with their
+  why, under `accepted_risks` in `.claude/permissions.json`.
+- The guard, agents and hooks that apply are the ones on your main branch: a change made
+  on a feature branch takes effect once merged.
 - Features that change a **shared resource** (a single database, shared infra) run one
   at a time: worktrees isolate code, not external state.
 - Branch protection on GitHub isn't part of this (it needs a paid plan for private
