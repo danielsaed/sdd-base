@@ -45,7 +45,8 @@ def current_step(checks):
 
 
 def closed_unmerged_branches():
-    """Folders under .worktrees/ whose spec was deleted (closed) but whose branch isn't merged."""
+    """Folders under .worktrees/ without an open spec whose branch isn't merged: a closed spec
+    (feat/…) or docs mode (docs/…, which never has a spec). Both wait for their PR."""
     out = []
     merged = set(git("branch", "--merged", MAIN_BRANCH, "--format=%(refname:short)").split())
     for d in sorted(glob.glob(os.path.join(ROOT, ".worktrees", "*"))):
