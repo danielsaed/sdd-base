@@ -19,8 +19,12 @@ const LIMITS = {
   "specs/BACKLOG.md": 80,
   "specs/_template/spec.md": 40,
   "specs/_template/plan.md": 40,
+  "scripts/verify/README.md": 100,
 };
-const SPEC = 120; // specs/NNN-*/spec.md and plan.md: one feature, not an essay
+// specs/NNN-*/spec.md: one feature, not an essay. The plan.md of an open spec does NOT count:
+// it is a working document deleted at close, and trimming it to fit only took detail away
+// from the implementer. The plan TEMPLATE does have a limit (above).
+const SPEC = 120;
 // ─────────────────────────────────────────────────────────────────────────────
 
 const countLines = (f) => readFileSync(f, "utf8").split("\n").length - 1;
@@ -28,7 +32,7 @@ const files = { ...LIMITS };
 if (existsSync("docs")) for (const f of readdirSync("docs")) if (f.endsWith(".md")) files[`docs/${f}`] ??= DEFAULT_DOCS;
 if (existsSync("specs")) for (const d of readdirSync("specs", { withFileTypes: true })) {
   if (!d.isDirectory() || d.name.startsWith("_")) continue;
-  for (const f of ["spec.md", "plan.md"]) files[`specs/${d.name}/${f}`] ??= SPEC;
+  files[`specs/${d.name}/spec.md`] ??= SPEC;
 }
 
 let bad = 0;
