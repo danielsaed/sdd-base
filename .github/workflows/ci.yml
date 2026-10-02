@@ -18,6 +18,7 @@ jobs:
       # Docs within their line limits: a doc that grows unchecked stops being read.
       - name: Docs within their limits
         run: node scripts/check-docs.mjs
-      # Agent permissions and closeout rules still hold.
+      # Agent permissions (guard self-test: cases + mutation per rule) and closeout rules
+      # still hold. A broken guard blocks every agent or lets through push/shared changes.
       - name: Hooks self-test
         run: bash scripts/test-hooks.sh
