@@ -46,6 +46,8 @@ wt docs-x >/dev/null; [ "$(git -C "$WT/docs-x" branch --show-current 2>/dev/null
 [ -e "$WT/docs-x/.port" ] && bad "docs mode got a port"
 p1=$(cat "$WT/data-sync-fix/.port"); wt data-sync-fix --rm >/dev/null; wt data-sync-fix >/dev/null
 [ "$(cat "$WT/data-sync-fix/.port")" = "$p1" ] || bad "port not stable across --rm and re-create"
+echo x > "$WT/data-sync-fix/note.txt"; g "$WT/data-sync-fix" add note.txt; g "$WT/data-sync-fix" commit -qm note  # unmerged now
+remind | grep -q "(data-sync/fix closed or not written yet)" || bad "reminder doesn't split <area>-<slug> by the longest area"
 wt billing-refunds --new-area billing >/dev/null; [ -f "$WT/billing-refunds/areas/billing/README.md" ] || bad "--new-area didn't create the area README"
 
 # ── reminder + closeout over an open spec at areas/workflow/open/demo ──
