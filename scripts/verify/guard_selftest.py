@@ -40,7 +40,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HOOK = os.path.join(ROOT, ".claude", "hooks", "agent_guard.py")
 PERMISSIONS = os.path.join(ROOT, ".claude", "permissions.json")
-W = ".worktrees/012-x"
+W = ".worktrees/workflow-x"
 P_SCRIPT = "scripts/apply-shared-change.sh"  # matches `protected` in permissions.json
 I, R, PL = "implementer", "reviewer", "planner"
 
@@ -75,7 +75,7 @@ os.symlink(ROOT, os.path.join(LINKS, "link-to-repo"))  # a "temp" path that is r
 # (description, agent | None = main session, tool, input, "ok" | "no")
 CASES = [
     # ── Blocked: push / merge / main, by any route ──
-    ("git push", I, *bash("git push origin feat/012-x"), "no"),
+    ("git push", I, *bash("git push origin feat/workflow-x"), "no"),
     ("git -C folder push (the classic hole)", I, *bash(f"git -C {W} push"), "no"),
     ("git --no-pager -C x push", I, *bash("git --no-pager -C x push"), "no"),
     ("git -c alias.p=push p", I, *bash("git -c alias.p=push p"), "no"),
@@ -237,9 +237,16 @@ CASES = [
     ("implementer edits in /tmp", I, *write("/tmp/sdd-x/a.txt"), "ok"),
     ("implementer edits outside", I, *write("src/a.py"), "no"),
     ("implementer edits .env in its folder", I, *write(f"{W}/.env"), "no"),
-    ("planner writes plan.md", PL, *write("specs/012-x/plan.md"), "ok"),
-    ("planner writes plan.md in a folder", PL, *write(f"{W}/specs/012-x/plan.md"), "ok"),
-    ("planner writes spec.md", PL, *write("specs/012-x/spec.md"), "no"),
+    ("planner writes plan.md", PL, *write("areas/workflow/open/x/plan.md"), "ok"),
+    ("planner writes plan.md in a folder", PL, *write(f"{W}/areas/workflow/open/x/plan.md"), "ok"),
+    ("planner writes plan.md (hyphenated area/slug)", PL, *write(f"{W}/areas/data-sync/open/a-b/plan.md"), "ok"),
+    ("planner writes spec.md", PL, *write(f"{W}/areas/workflow/open/x/spec.md"), "no"),
+    ("planner writes a closed spec", PL, *write(f"{W}/areas/workflow/done/2026-01-x.md"), "no"),
+    ("planner writes the area README", PL, *write(f"{W}/areas/workflow/README.md"), "no"),
+    ("planner writes the plan template", PL, *write("areas/_template/plan.md"), "no"),
+    ("planner writes a nested plan.md", PL, *write("areas/workflow/open/x/y/plan.md"), "no"),
+    ("planner writes HISTORY", PL, *write("areas/HISTORY.md"), "no"),
+    ("planner writes the old specs/ path", PL, *write("specs/012-x/plan.md"), "no"),
     ("planner uses the terminal", PL, *bash("ls"), "no"),
     ("reviewer edits", R, *write(f"{W}/src/a.py"), "no"),
     ("other subagent: push", "general-purpose", *bash("git push"), "no"),
