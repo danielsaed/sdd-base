@@ -1,6 +1,6 @@
-# NNN · Plan
+# <area>/<slug> · Plan
 
-<!-- Written by the planner. Short: a task list, not an essay. -->
+<!-- Written by the planner. Short: a task list, not an essay. Deleted at close. -->
 
 ## Tasks
 One task = one commit. Mark which can run in parallel (disjoint files).
@@ -14,10 +14,11 @@ Migration / infra change, dependents affected, how it's tested without side effe
 "None" if that's the case.
 
 ## Risks
-Entries from [docs/GOTCHAS.md](../../docs/GOTCHAS.md) that apply (by name).
+Entries from the area's Gotchas ([../../README.md](../../README.md#gotchas)) and from
+[docs/GOTCHAS.md](../../../../docs/GOTCHAS.md) that apply (by name).
 
 ## Verification
 Which script or command covers each acceptance criterion of the spec.
 
 ## Docs at close
-Which topic doc receives what lasts.
+Which section of the area README (How it works · Gotchas · Pending) receives what lasts.

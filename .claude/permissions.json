@@ -5,10 +5,10 @@
   "roles": {
     "planner": {
       "why": "Only plans: reads the repo and writes its plan.md. No terminal, so it runs nothing.",
-      "edit": ["(\\.worktrees/[^/]+/)?specs/\\d{3}-[^/]+/plan\\.md"],
+      "edit": ["(\\.worktrees/[^/]+/)?areas/[^/_][^/]*/open/[^/]+/plan\\.md"],
       "temp": false,
       "terminal": false,
-      "reason_edit": "the planner only writes specs/NNN-slug/plan.md.",
+      "reason_edit": "the planner only writes areas/<area>/open/<slug>/plan.md.",
       "reason_terminal": "the planner doesn't use the terminal."
     },
     "reviewer": {
@@ -23,7 +23,7 @@
       "edit": ["\\.worktrees/[^/]+/.+"],
       "temp": true,
       "terminal": true,
-      "reason_edit": "a subagent only edits inside its feature folder (.worktrees/NNN-slug/). Ask the orchestrator to create it with scripts/worktree.sh."
+      "reason_edit": "a subagent only edits inside its feature folder (.worktrees/<area>-<slug>/). Ask the orchestrator to create it with scripts/worktree.sh."
     },
     "*": "implementer"
   },
@@ -116,7 +116,7 @@
      "reason": ".env files are not read (scripts load them themselves)."},
     {"id": "rm-rf-outside", "type": "program", "argv": ["rm"], "any": ["-[a-zA-Z]*[rR][a-zA-Z]*|--recursive"],
      "paths_outside": true,
-     "why": "Recursive deletes only inside a feature folder (.worktrees/NNN/…) or temp folders. Relative paths resolve against the agent's REAL cwd (subagents start at the main root) following the command's `cd`s; `..`, `/…`, `~`, `.`, `*` or a variable with no known value are outside.",
+     "why": "Recursive deletes only inside a feature folder (.worktrees/<name>/…) or temp folders. Relative paths resolve against the agent's REAL cwd (subagents start at the main root) following the command's `cd`s; `..`, `/…`, `~`, `.`, `*` or a variable with no known value are outside.",
      "reason": "rm -r outside your feature folder or temp folders."},
     {"id": "guard-files-write", "type": "program",
      "argv": ["sed|perl|ruby|tee|truncate|touch|chmod|rm|unlink|mv|cp|ln|install|rsync|dd"],

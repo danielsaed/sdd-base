@@ -6,8 +6,9 @@ description: Orchestrator manual for the SDD flow (spec → plan → code → ve
 # Orchestrating a feature (SDD flow)
 
 You are the **orchestrator**: you decide, delegate and close. Whatever can be delegated is
-delegated, so your context lasts and features move in parallel. Rules, roles and resources
-per role: [specs/README.md](../../../specs/README.md).
+delegated, so your context lasts and features move in parallel. Flow, areas and spec
+lifecycle: [areas/README.md](../../../areas/README.md); roles and resources per role:
+[areas/workflow/README.md](../../../areas/workflow/README.md).
 
 ## 0. Which mode?
 **You decide and propose it**: if the task is long, complex or parallelizable, recommend
@@ -16,14 +17,20 @@ the flow to the user without waiting to be asked; if it's small and one-off, jus
 - **Quick:** small fix with no shared change. 5-line spec, no planner (tick step 2
   "n/a"). **Never** without reviewer or PR.
 - **Docs:** only documentation → `scripts/worktree.sh docs-<topic>` (branch `docs/<topic>`,
-  no port), commit, PR, green CI and OK. No spec, no reviewer.
+  no port), commit (with a line at the top of `areas/HISTORY.md`), PR, green CI and OK.
+  No spec, no reviewer.
 - **Question or analysis with no changes:** no spec; just answer.
 
 ## 1. Spec  (you)
-1. Number: next after those in `specs/`, `.worktrees/` and `git log --oneline | grep -o 'spec [0-9]*'`.
-2. `scripts/worktree.sh NNN-slug` → folder + branch `feat/NNN-slug` + port; shared files linked.
-3. Copy `specs/_template/spec.md` to `.worktrees/NNN-slug/specs/NNN-slug/spec.md` and fill
-   it in. **Measurable** criteria, each with its script/command. Say what does NOT change.
+1. **Area:** the existing one where most of the spec falls (`ls areas/`). A new area only
+   if the three conditions in `areas/README.md` hold, and **with the user's OK** (same to
+   split or merge). **Slug:** short, what it does (`port-hash`); no numbers. Planning
+   several specs? Name them by slug and order them in `areas/BACKLOG.md`.
+2. `scripts/worktree.sh <area>-<slug>` → folder + branch `feat/<area>-<slug>` + port;
+   shared files linked (new approved area: add `--new-area <area>`).
+3. Copy `areas/_template/spec.md` to
+   `.worktrees/<area>-<slug>/areas/<area>/open/<slug>/spec.md` and fill it in.
+   **Measurable** criteria, each with its script/command. Say what does NOT change.
 4. **Show it to the user and wait for the OK.** Tick `[x] 1` and commit on the branch.
 
 ## 2. Plan  (`planner` agent)
@@ -36,7 +43,7 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 - Several features in parallel = several folders. **Shared resources: one feature at a time.**
 - **Agents sharing a folder:** remind them to `git add` only their own files; you don't
   commit (least of all `commit -a`) while they run. Large tasks: one folder per agent.
-- Tell it its reserved resources (specs/README «Resources per role») and the checks that
+- Tell it its reserved resources (areas/workflow/README.md «Resources per role») and the checks that
   apply ([scripts/verify/README.md](../../../scripts/verify/README.md)).
 - Read its report. If it says something couldn't be done, you decide; don't hide it. Tick `[x] 3`.
 
@@ -54,12 +61,17 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 - **APPROVED** → tick `[x] 4`.
 
 ## 5. Close  (you, in the feature folder)
-1. What lasts → its topic doc; `docs/STATUS.md` (what exists + one log line, rotating at 7);
-   `specs/BACKLOG.md` (remove what's done, add what was discovered); a new gotcha if one
-   was learned.
-2. `node scripts/check-docs.mjs` green (if a doc goes over, compact it).
-3. **Delete `specs/NNN-slug/`** (git keeps it). Commit "spec NNN: close".
-4. `git push -u origin feat/NNN-slug` and `gh pr create` (what, why, how it was verified).
+1. What lasts → the area README (How it works; a new trap in «Gotchas»; discovered work
+   in «Pending»; stack-wide traps → `docs/GOTCHAS.md`); `docs/STATUS.md` if what exists
+   changed; `areas/BACKLOG.md` (remove what's done, reorder).
+2. **Move the spec, don't delete it:** tick `[x] 5`, fill its «Outcome» (3-5 lines: PR,
+   what deviated), `git mv areas/<area>/open/<slug>/spec.md areas/<area>/done/YYYY-MM-<slug>.md`;
+   delete `plan.md`. If `done/` now has more than 3, `git rm` the oldest (main keeps it).
+3. One line at the TOP of `areas/HISTORY.md`: `YYYY-MM-DD · <area>/<slug> · what · PR #N`
+   (the PR number: open the PR first, then add it to this line and the «Outcome» in a last commit).
+4. `node scripts/check-docs.mjs` green (if a doc goes over, compact it). Commit
+   "<area>/<slug>: close". `git push -u origin feat/<area>-<slug>` and `gh pr create`
+   (what, why, how it was verified).
 5. Watch CI in the background → when green, **ask the user for OK** → `gh pr merge --squash --delete-branch`.
    **Conditional OK** («merge if green»): `gh pr checks N --watch` in the background;
    green → merge and tell the user; red → don't merge, tell the user with the failure.
@@ -67,7 +79,7 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 6. `git pull` on main. **If the PR changed a dependency lockfile** (`package-lock.json`,
    `uv.lock`, `poetry.lock`, `requirements*.txt`, `Cargo.lock`…), re-sync dependencies in
    the main checkout (the command in AGENTS.md «How to run»): they aren't in git, and the
-   user's checkout breaks otherwise. Then `scripts/worktree.sh NNN-slug --rm`.
+   user's checkout breaks otherwise. Then `scripts/worktree.sh <area>-<slug> --rm`.
 
 ## Non-negotiable rules
 - Nothing reaches `main` without a PR. No shared change applied and no merge without explicit OK.
@@ -79,7 +91,7 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
   processes and resources; what the user has running is theirs.
 - The guard, agents and hooks that govern are the **main branch's**
   (`.claude/permissions.json`): a change on a branch applies once merged. Subagents start
-  with cwd at the main root: give them absolute paths or `cd .worktrees/NNN-slug`.
+  with cwd at the main root: give them absolute paths or `cd .worktrees/<area>-<slug>`.
 - **Every answer ends with a Status block:** Running · Pending · Need from you. «Need from
   you» is self-contained (full steps, where, what to copy; never «step 3» or «as above»).
 - If the closeout hook blocks you, do the step; if you truly must wait for the user, say so.
