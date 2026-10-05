@@ -23,12 +23,24 @@ Run them from the root or from a feature folder.
   The guard that applies is the main checkout's: a branch's is measured by running its hook by path.
 - **`../test-hooks.sh`** — the guard self-test plus, in a throwaway copy of the repo, the
   reminder and closeout hooks and `worktree.sh` over the areas layout (open spec, steps,
-  close moved vs deleted, HISTORY, >3 done, >15 areas). Runs in CI. `bash scripts/test-hooks.sh`.
+  close moved vs deleted, HISTORY, >3 done, >15 areas); the reminder stays <= 600
+  characters with 1 open spec + 1 pending PR, and every state line (spec + step, PR to
+  merge, docs mode, dirty main) survives, with a mutation case for the length cap. Runs in
+  CI. `bash scripts/test-hooks.sh`.
 - **`../worktree.sh`** — feature folder: `<area>-<slug>` (branch `feat/…`, the area must
   exist, dependencies cloned, `.port` from a hash of the name) · `--new-area <area>` ·
   `docs-topic` (branch `docs/…`, no port) · `… --rm`. Links the shared files.
 - **`../baseline.sh`** — disposable worktree of `main` in a temp folder, to compare
   before/after without touching the main checkout. `scripts/baseline.sh` · `--rm`.
+- **`pr_wait_selftest.sh`** — self-test of `scripts/pr_wait.sh` with a fake `gh` on the
+  PATH (never talks to GitHub): without `--merge` it doesn't merge, a red/cancelled/
+  checkless CI doesn't either, the summary is 1 line; built-in mutation. Runs in CI.
+  `bash scripts/verify/pr_wait_selftest.sh`
+- **`../pr_wait.sh`** — watches a PR's CI (and, with `--merge`, only the orchestrator with
+  the user's OK: merges, follows the deploy and runs your production check); one summary
+  line, log in `$TMPDIR/pr_wait-N.log`. `scripts/pr_wait.sh N [--merge]` ·
+  `PR_WAIT_DEPLOY=none|github-deployments` · `PR_WAIT_DEPLOY_PATHS='^web/'` ·
+  `PR_WAIT_CHECK="…"`.
 
 ## TODO: your project's checks
 One entry per script, grouped by area (output, data, performance, security…):
