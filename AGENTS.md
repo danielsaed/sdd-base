@@ -1,8 +1,8 @@
 # <Project name> — project context
 
-> **Entry point for ANY agent/AI/editor** (`AGENTS.md` standard; `CLAUDE.md` just points
-> here). All context lives **in the repo** —this file, `docs/`, `areas/` and the code—,
-> never in a tool's memory. Invariants only: no dated entries (that's git).
+> **Entry point for ANY agent/AI/editor** (`AGENTS.md` standard; Claude Code reads it
+> natively, no `CLAUDE.md` needed). All context lives **in the repo** —this file, `docs/`,
+> `areas/` and the code—, never in a tool's memory. Invariants only: no dated entries (that's git).
 > **Limit: 150 lines** (`scripts/check-docs.mjs`).
 >
 > 👉 Fill in every `TODO` below when you bootstrap a project from this template.
@@ -49,6 +49,11 @@ Hard rules: shared resources (single DB, infra) are **not** parallelized; only t
 orchestrator applies shared changes, with OK; nothing reaches `main` without a PR;
 creating, splitting or merging an area needs the user's OK.
 Orchestrator manual: skill `sdd`. The hooks remind the current step on every message.
+**Lightweight orchestrator:** large outputs (database queries, logs, code sweeps) are read
+by an agent that returns the summary; waits go in ONE background process
+(`scripts/pr_wait.sh`). The user cuts the session with `/clear` whenever they want:
+everything stays written in the repo. Before that, the ritual: new user preferences →
+here; pending work → BACKLOG.
 
 > **Before touching an area**, read its README (`areas/<area>/README.md`, above all
 > «Gotchas») and [docs/GOTCHAS.md](docs/GOTCHAS.md).

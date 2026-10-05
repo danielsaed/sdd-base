@@ -28,8 +28,12 @@ cp "$T/areas/_template/README.md" "$T/areas/data/README.md"; cp "$T/areas/_templ
 g "$T" add -A && g "$T" commit -qm base || bad "can't build the throwaway repo"
 H="$T/.claude/hooks"; WT="$T/.worktrees"
 remind() { (cd "$T" && echo '{}' | python3 "$H/reminder.py"); }
-close() { (cd "$T" && echo "$2" | python3 "$H/closeout.py" >/dev/null 2>&1); local got=$([ $? = 2 ] && echo block || echo pass)
-  [ "$got" = "$1" ] || bad "closeout: $3 → $got (expected $1)"; }
+length() { python3 -c 'import sys; print(len(sys.stdin.read()))'; }
+# close <pass|block> <json> <case> [text the notice must contain]
+close() { local err; err=$(cd "$T" && echo "$2" | python3 "$H/closeout.py" 2>&1 >/dev/null); local rc=$?
+  local got=$([ "$rc" = 2 ] && echo block || echo pass)
+  [ "$got" = "$1" ] || bad "closeout: $3 → $got (expected $1): ${err:0:200}"
+  [ -z "${4:-}" ] || echo "$err" | grep -qF -- "$4" || bad "closeout: $3 → the notice doesn't say «$4»"; }
 wt() { (cd "$T" && bash scripts/worktree.sh "$@" 2>&1); }
 
 # ── worktree.sh: <area>-<slug>, stable port, unknown area rejected, docs mode ──
@@ -47,7 +51,7 @@ wt docs-x >/dev/null; [ "$(git -C "$WT/docs-x" branch --show-current 2>/dev/null
 p1=$(cat "$WT/data-sync-fix/.port"); wt data-sync-fix --rm >/dev/null; wt data-sync-fix >/dev/null
 [ "$(cat "$WT/data-sync-fix/.port")" = "$p1" ] || bad "port not stable across --rm and re-create"
 echo x > "$WT/data-sync-fix/note.txt"; g "$WT/data-sync-fix" add note.txt; g "$WT/data-sync-fix" commit -qm note  # unmerged now
-remind | grep -q "(data-sync/fix closed or not written yet)" || bad "reminder doesn't split <area>-<slug> by the longest area"
+remind | grep -q "data-sync/fix closed or not written yet" || bad "reminder doesn't split <area>-<slug> by the longest area"
 wt billing-refunds --new-area billing >/dev/null; [ -f "$WT/billing-refunds/areas/billing/README.md" ] || bad "--new-area didn't create the area README"
 
 # ── reminder + closeout over an open spec at areas/workflow/open/demo ──
@@ -55,9 +59,22 @@ D="$WT/workflow-demo"; S="$D/areas/workflow/open/demo"; mkdir -p "$S"
 sed 's|<area>/<slug> · Short title|workflow/demo · selftest|' "$T/areas/_template/spec.md" > "$S/spec.md"
 tick() { for n in "$@"; do sed -i.bak "s/- \[ \] $n/- [x] $n/" "$S/spec.md"; done; rm -f "$S/spec.md.bak"; }
 remind | grep -q "spec workflow/demo (feat/workflow-demo) → next step: 1" || bad "reminder doesn't list the open spec"
+# At this point there's already 1 open spec (workflow/demo) + 1 pending PR (data-sync-fix,
+# closed earlier): the exact scenario the reminder's length cap is measured against.
+MAX=600
+len1=$(remind | length); [ "$len1" -le $MAX ] || bad "reminder with 1 open spec + 1 pending PR: $len1 characters (cap $MAX)"
+echo "· reminder with 1 open spec + 1 pending PR: $len1 characters (cap $MAX)"
 close pass '{}' "fresh spec"
-echo x > "$T/stray.txt"; close block '{}' "uncommitted changes on main"; rm "$T/stray.txt"
-tick 1 2 3 4; close block '{}' "verified but not closed"
+# Dirty main is a state line too: it must survive in the reminder, not just block closeout.
+echo x > "$T/stray.txt"
+remind | grep -q "⚠ Uncommitted changes on main" || bad "reminder doesn't warn about uncommitted changes on main"
+close block '{}' "uncommitted changes on main"
+rm "$T/stray.txt"
+# A docs/… branch with a commit (docs mode) is a state line too, kept across the trim.
+wt docs-notes >/dev/null
+echo n > "$WT/docs-notes/n.txt"; g "$WT/docs-notes" add n.txt; g "$WT/docs-notes" commit -qm n
+remind | grep -q "docs/notes: docs mode, PR to merge" || bad "reminder doesn't show the docs-mode state line"
+tick 1 2 3 4; close block '{}' "verified but not closed" "AGENTS.md"
 close pass '{"stop_hook_active":true}' "blocks only once per turn"
 sed -i.bak 's/- \[x\] 2/- [ ] 2/' "$S/spec.md"; rm -f "$S/spec.md.bak"; close block '{}' "skipped step"; tick 2
 mkdir -p "$D/areas/workflow/open/other"; cp "$S/spec.md" "$D/areas/workflow/open/other/"
@@ -86,5 +103,13 @@ rm -rf "$T/areas/workflow/done"
 remind | grep -q "areas (healthy" && bad "reminder warns about too many areas with only 3"
 for i in $(seq 1 13); do mkdir -p "$T/areas/fake$i"; done   # 3 real + 13 = 16
 remind | grep -q "16 areas (healthy: 8-15)" || bad "reminder doesn't warn about 16 areas"
+
+# ── Mutation: a reminder that regrows past the cap must be CAUGHT (the $MAX check isn't vacuous) ──
+sed '$d' "$H/reminder.py" > "$H/reminder-mutant.py"
+echo 'lines.append("x" * 700)' >> "$H/reminder-mutant.py"
+tail -1 "$H/reminder.py" >> "$H/reminder-mutant.py"
+nmut=$((cd "$T" && echo '{}' | python3 "$H/reminder-mutant.py") | length)
+[ "$nmut" -gt "$MAX" ] || bad "mutation «length»: a reminder past the cap isn't caught by the >$MAX check (got $nmut)"
+rm -f "$H/reminder-mutant.py"
 
 [ $fails = 0 ] && echo "✓ hooks self-test passed" || { echo "$fails failure(s)"; exit 1; }

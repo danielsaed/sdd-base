@@ -22,3 +22,7 @@ jobs:
       # still hold. A broken guard blocks every agent or lets through push/shared changes.
       - name: Hooks self-test
         run: bash scripts/test-hooks.sh
+      # scripts/pr_wait.sh against a fake `gh`: never merges without --merge, nor with a
+      # red/cancelled/checkless CI either; the summary stays 1 line.
+      - name: pr_wait.sh self-test
+        run: bash scripts/verify/pr_wait_selftest.sh

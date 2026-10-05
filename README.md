@@ -24,6 +24,11 @@ It's stack-agnostic: you plug in your own verification commands.
 - **The orchestrator doesn't forget the rules in long sessions.** A hook re-injects the
   flow and each open spec's current step on every message, and another won't let a turn
   end with a verified-but-unclosed spec or a skipped step.
+- **Consumption is a design constraint.** Each role runs on the model its job needs
+  (planner and implementer on a cheaper one, the reviewer on the strongest); chained
+  background waits (`scripts/pr_wait.sh`) end in ONE notice instead of one per step; and
+  the per-message reminder stays under 600 characters, with the rest of the rules living
+  in the skill and the docs instead of repeating on every turn.
 - **Docs live next to their work.** Each subsystem is an *area* folder: how it works, its
   traps, its pending work, its open specs and its last closed ones. Specs are named
   `<area>/<slug>`, never numbered, so reordering a plan of ten specs renumbers nothing.
@@ -49,7 +54,8 @@ Details: [areas/README.md](areas/README.md) · orchestrator manual:
 ## What's inside
 
 ```
-AGENTS.md · CLAUDE.md          project context template (CLAUDE.md → @AGENTS.md)
+AGENTS.md                      project context template (fill in every TODO; Claude Code
+                                reads it natively — no CLAUDE.md needed)
 areas/README.md                the flow, modes, when to create an area, spec lifecycle
 areas/BACKLOG.md · HISTORY.md  what's next across areas · one line per closed spec
 areas/_template/               area README, spec.md (5-step checklist) and plan.md
@@ -65,7 +71,8 @@ scripts/worktree.sh            isolated folder + branch + port per <area>-<slug>
 scripts/baseline.sh            disposable copy of main to compare before/after
 scripts/check-docs.mjs         doc line limits and at most 3 closed specs per area (CI)
 scripts/test-hooks.sh          self-test of the hooks (CI)
-scripts/verify/                guard self-test + catalog of your reusable checks
+scripts/pr_wait.sh             watches a PR's CI (and, with --merge, merges + deploy) in ONE background process
+scripts/verify/                guard self-test + catalog of your reusable checks, incl. pr_wait_selftest.sh
 ```
 
 ## Getting started

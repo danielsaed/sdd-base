@@ -25,6 +25,9 @@ relative paths resolve against the hook's REAL cwd (subagents start at the main 
 following the command's `cd`s; inline code (`node -e`, `python3 -c`…) is scanned; scripts
 are judged by where their symlinks point. What can't be analyzed (unclosed quotes, a shell
 or interpreter reading stdin, a program that is a variable with no known value) is denied.
+An `executes` rule's `option` matches a value-less flag (`script.sh --merge`) the same
+way: exact, abbreviated (`--m…`), `=value`, or unreadable (`$…`, a substitution, `{}`,
+or xargs' stdin) all count as present, so a subagent can't slip it past the rule.
 Before changing rules, measure them on real commands: `guard_selftest.py --corpus`.
 
 Deny = exit 2 + reason on stderr (the agent reads it and corrects itself). Self-test:
@@ -52,6 +55,7 @@ CTX = {"root": "", "cwd": "", "line": ""}  # set by decide(): to resolve relativ
 CWD = "\0cwd"  # key in `variables`: folder after the command's `cd`s (None = the agent's; False = unknown)
 PUNCT = "();<>|&\n"
 SUB = re.compile(r"__SUB\d+__")  # marker of a $(…) substitution: analyzed when its command is reached
+XARGS = "\0xargs"  # marker: "the rest of these arguments come from xargs' stdin" (can't be read)
 # Shell words that go BEFORE the real command: `do git push` runs git push.
 KEYWORDS = {"{", "}", "!", "do", "then", "else", "elif", "if", "while", "until"}
 # Environment variables that may appear in a program's path (`$TMPDIR/x.sh`).
@@ -235,6 +239,11 @@ def strip_launchers(argv):
             # `echo push | xargs git`: the subcommand arrives on stdin, it can't be analyzed.
             if argv and os.path.basename(argv[0]) == "git" and len(git_normal(argv)) < 2:
                 raise Denied("xargs git without a literal subcommand: can't be analyzed.")
+            # Anything else gets EXTRA arguments from stdin after the given ones: mark them
+            # so a flag rule (`option`) treats the command as unreadable, not as "no flag"
+            # (`echo --merge | xargs pr_wait.sh 30`).
+            if argv:
+                argv = argv + [XARGS]
         elif b == "npx":
             argv = skip_options(argv[1:], ("-p", "--package", "-c", "--call"))
         elif b == "uv" and argv[1:2] == ["run"]:
@@ -398,6 +407,10 @@ def simple(argv, redir, depth, variables):
             return
         if not skip_options(args, ("-o", "+o")):
             raise Denied(f"{b} without a script or -c reads stdin: can't be analyzed.")
+        # `cat x.sh | bash -s 30 --merge`: with -s the script arrives on stdin and what
+        # follows are ITS arguments (not a script to look for), like `bash <`.
+        if any(re.fullmatch(r"-[a-zA-Z]*s[a-zA-Z]*", x) for x in args if x.startswith("-")):
+            raise Denied(f"{b} -s reads the script from stdin: can't be analyzed.")
     if b in SHELLS or interpreter(b) or b in ("source", "."):
         s, _, _ = parts(argv)
         # `bash <(curl …)`, `… | sh /dev/stdin`: the script arrives through a pipe, like stdin.
@@ -541,6 +554,19 @@ def matches(r, c):
     if t == "executes":
         s, args, _ = parts(c.argv)
         if not s or s == MODULE or not (re.search(r["script"], s) or re.search(r["script"], resolved(s, c.cwd))):
+            return False
+        if "option" in r:
+            # A value-less flag (`pr_wait.sh N --merge`): the exact flag, a `--` prefix of
+            # it (argparse abbreviates long options), `--merge=…`, or an argument that
+            # can't be read: it has `$`, is a $(…)/`…` substitution (marker __SUBn__), is
+            # the `{}` xargs/find use for their placeholder, or is what xargs reads from
+            # stdin (marker XARGS).
+            o = r["option"]
+            for a in args:
+                name = a.split("=", 1)[0]
+                if ("$" in a or SUB.search(a) or a in ("{}", XARGS) or name == o
+                        or (len(name) > 2 and name.startswith("--") and o.startswith(name))):
+                    return True
             return False
         if "option_prefix" not in r:
             return True
