@@ -8,12 +8,15 @@
 
 ### Roles and permissions
 
-| Role | Does | Cannot |
+| Role (model) | Does | Cannot |
 |---|---|---|
 | **orchestrator** (main session) | writes the spec, delegates, merges the PR, applies shared changes, closes docs | apply shared changes or merge without the user's OK; code what it can delegate |
-| **planner** | reads the repo, writes `areas/<area>/open/<slug>/plan.md` | edit anything else, use the terminal |
-| **implementer** | code + commits on ITS branch, in ITS folder; runs checks | push, merge, touch `main`, read `.env`, add dependencies, run protected commands |
-| **reviewer** | runs the checks and the acceptance criteria | edit anything, install dependencies |
+| **planner** (`sonnet`) | reads the repo, writes `areas/<area>/open/<slug>/plan.md` | edit anything else, use the terminal |
+| **implementer** (`sonnet`; `opus` if it gets stuck, or on a shared resource/security) | code + commits on ITS branch, in ITS folder; runs checks | push, merge, touch `main`, read `.env`, add dependencies, run protected commands |
+| **reviewer** (`opus`) | runs the checks and the acceptance criteria | edit anything, install dependencies |
+
+Each agent's `model:` header sets its default; the orchestrator may pass `model: opus` on
+the call for a delicate task or when the implementer is stuck.
 
 Permissions are enforced, not just written: each agent's `tools:` (`.claude/agents/`),
 the `deny` rules in `.claude/settings.json` and the `agent_guard.py` hook, which reads
@@ -21,9 +24,14 @@ the `deny` rules in `.claude/settings.json` and the `agent_guard.py` hook, which
 rule with its why; self-test with mutation in CI: `scripts/verify/guard_selftest.py`).
 It stops mistakes by cooperative agents, not an attacker.
 
-Hooks: `reminder.py` re-injects the flow and each open spec's step on every message;
-`closeout.py` won't let a turn end on a skipped step or an incomplete close; both read
-`sdd_state.py`. Self-test of all of them: `scripts/test-hooks.sh` (CI).
+Hooks: `reminder.py` re-injects each open spec's step on every message, trimmed to stay
+under 600 characters (the rest of the rules live in the skill `sdd`); `closeout.py` won't
+let a turn end on a skipped step or an incomplete close, and recalls the close ritual (new
+user preferences → `AGENTS.md`, pending → `BACKLOG.md`); both read `sdd_state.py`.
+Self-test of all of them: `scripts/test-hooks.sh` (CI). `scripts/pr_wait.sh N [--merge]`
+chains the CI/merge/deploy waits for a PR into ONE background notice instead of one per
+step (self-test: `scripts/verify/pr_wait_selftest.sh`); the guard denies subagents
+`--merge` (rule `pr-wait-merge`).
 
 ### Resources per role
 Agents only start and stop **their own** processes, never what the user has running.

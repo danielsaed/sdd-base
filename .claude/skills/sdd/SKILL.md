@@ -10,6 +10,18 @@ delegated, so your context lasts and features move in parallel. Flow, areas and 
 lifecycle: [areas/README.md](../../../areas/README.md); roles and resources per role:
 [areas/workflow/README.md](../../../areas/workflow/README.md).
 
+**Consumption** (every turn re-reads the whole context):
+- **Don't read large outputs** (database queries, logs, code sweeps): launch an agent that
+  returns the summary instead.
+- **Model per role** (each agent's `model:` header): planner and implementer `sonnet`,
+  reviewer `opus`. Launch the implementer with `model: opus` in the call if it gets stuck
+  (comes back from the reviewer with the same finding) or the spec touches a shared
+  resource or security.
+- **Chain background waits in ONE process** (`scripts/pr_wait.sh`, or a single loop): one
+  notice at the end, never one per intermediate step.
+- **Sessions:** the user cuts them with `/clear` whenever they want. Leave everything
+  written in the repo (spec, plan, commits) so a cut loses nothing.
+
 ## 0. Which mode?
 **You decide and propose it**: if the task is long, complex or parallelizable, recommend
 the flow to the user without waiting to be asked; if it's small and one-off, just do it.
@@ -63,7 +75,8 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 ## 5. Close  (you, in the feature folder)
 1. What lasts → the area README (How it works; a new trap in «Gotchas»; discovered work
    in «Pending»; stack-wide traps → `docs/GOTCHAS.md`); `docs/STATUS.md` if what exists
-   changed; `areas/BACKLOG.md` (remove what's done, reorder).
+   changed; `areas/BACKLOG.md` (remove what's done, reorder). Ritual: new user
+   preferences → `AGENTS.md` (the closeout hook recalls this).
 2. **Move the spec, don't delete it:** tick `[x] 5`, fill its «Outcome» (3-5 lines: PR,
    what deviated), `git mv areas/<area>/open/<slug>/spec.md areas/<area>/done/YYYY-MM-<slug>.md`;
    delete `plan.md`. If `done/` now has more than 3, `git rm` the oldest (main keeps it).
@@ -72,10 +85,13 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 4. `node scripts/check-docs.mjs` green (if a doc goes over, compact it). Commit
    "<area>/<slug>: close". `git push -u origin feat/<area>-<slug>` and `gh pr create`
    (what, why, how it was verified).
-5. Watch CI in the background → when green, **ask the user for OK** → `gh pr merge --squash --delete-branch`.
-   **Conditional OK** («merge if green»): `gh pr checks N --watch` in the background;
-   green → merge and tell the user; red → don't merge, tell the user with the failure.
-   Check the PR state first: the user may have merged it from GitHub.
+5. `scripts/pr_wait.sh N` in the background: watches CI and reports with ONE line (never
+   merges). On **the user's OK** → `gh pr merge --squash --delete-branch`.
+   **Conditional OK** («merge if green»): `scripts/pr_wait.sh N --merge` in the
+   background: green → merges, follows the deploy (if configured) and checks production;
+   red or no checks → doesn't merge. **`--merge` only with that OK** (subagents are denied
+   it by the guard). Log in `$TMPDIR/pr_wait-N.log`. Check the PR state first: the user may
+   have merged it from GitHub.
 6. `git pull` on main. **If the PR changed a dependency lockfile** (`package-lock.json`,
    `uv.lock`, `poetry.lock`, `requirements*.txt`, `Cargo.lock`…), re-sync dependencies in
    the main checkout (the command in AGENTS.md «How to run»): they aren't in git, and the
@@ -85,7 +101,7 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 - Nothing reaches `main` without a PR. No shared change applied and no merge without explicit OK.
 - The repo is the source of truth; tool memory only remembers where we were.
 - Subagent reports: short and with measurements. A "done" without a measurement isn't done.
-- **Nothing runs unwatched:** CI (`gh pr checks N --watch`), builds and agents go to the
+- **Nothing runs unwatched:** CI (`scripts/pr_wait.sh N`), builds and agents go to the
   background with a completion notice; act on the notice, don't wait for the user.
 - **Don't touch the user's environment:** agents (and you) start and stop only your own
   processes and resources; what the user has running is theirs.
