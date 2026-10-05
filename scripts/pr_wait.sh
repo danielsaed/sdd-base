@@ -16,7 +16,7 @@
 # Deploy/production check: OFF by default (this is a generic template; no provider is
 # assumed). CUSTOMIZE PER PROJECT with:
 #   PR_WAIT_DEPLOY=github-deployments   follow the merge commit's GitHub Deployments API
-#     (any provider that creates one per commit: e.g. Vercel, Render, Fly, Railway).
+#     (any provider that creates one per commit: e.g. Vercel, Render, Fly).
 #   PR_WAIT_DEPLOY_PATHS='^web/'        skip the deploy wait when the PR touches no path
 #     matching this regex ("" = the deploy applies regardless of which files changed).
 #   PR_WAIT_CHECK="node scripts/verify/your_production_check.mjs"   your production check;
