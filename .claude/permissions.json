@@ -41,6 +41,9 @@
      "reason": "merging belongs to the orchestrator, with the user's OK."},
     {"id": "gh-pr-merge", "type": "program", "argv": ["gh", "pr", "merge|close"],
      "reason": "merging or closing a PR belongs to the orchestrator, with the user's OK."},
+    {"id": "pr-wait-merge", "type": "executes", "script": "(^|/)pr_wait\\.sh$", "option": "--merge",
+     "why": "pr_wait.sh --merge runs a `gh pr merge` the guard can't see from the outside (it only sees the command that was run). Merging is the orchestrator's, with the user's OK. Without --merge it only watches the CI: that stays allowed.",
+     "reason": "merging a PR (pr_wait.sh --merge) belongs to the orchestrator, with the user's OK. Without --merge you may watch the CI."},
     {"id": "git-main", "type": "program", "argv": ["git", "checkout|switch"], "any": ["main"],
      "reason": "the main branch is off limits for subagents."},
     {"id": "git-branch-delete", "type": "program", "argv": ["git", "branch"], "any": ["-[a-zA-Z]*D[a-zA-Z]*|--delete"],
@@ -174,7 +177,11 @@
       {"risk": "grep -r for secrets without naming the .env (grep -r API_KEY .)",
        "why": "The guard blocks naming the .env; a recursive grep can pass through it. settings.json also denies Read of .env."},
       {"risk": "zsh =(…) (process substitution to a temp file)",
-       "why": "zsh isn't the agents' shell; bash's <(…) is covered."}
+       "why": "zsh isn't the agents' shell; bash's <(…) is covered."},
+      {"risk": "find -name pr_wait.sh -exec {} 30 --merge (the program IS find's {} placeholder)",
+       "why": "It takes intent to search for the script just to run it under an opaque placeholder. An agent that wants to watch the CI calls it by its path, where --merge is denied as usual."},
+      {"risk": "GNU parallel launching pr_wait.sh --merge or another denied command",
+       "why": "No agent uses parallel (not on macOS by default); parsing its ::: and {} syntax is a different language. A mistake doesn't produce this."}
     ]
   }
 }
