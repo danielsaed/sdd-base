@@ -1,11 +1,13 @@
 # sdd-base
 
-A starter repo for **spec-driven development with Claude Code**: the main session acts as
+A starter repo for **spec-driven development with Claude Code or OpenCode** (the same
+workflow in both): the main session acts as
 an **orchestrator** that writes a spec, gets your OK and delegates the work to
 permissioned subagents — **planner**, **implementer** and **reviewer**, plus a cheap
 **reader** for large outputs — one feature per branch and per pull request.
 
-It's stack-agnostic: you plug in your own verification commands.
+It's stack-agnostic: you plug in your own verification commands. A Playwright MCP server
+comes configured for both tools, so agents can check what a page really renders.
 
 ## Why
 
@@ -38,6 +40,10 @@ It's stack-agnostic: you plug in your own verification commands.
 - **Closed specs aren't lost, nor piled up.** A closed spec moves to its area's `done/`
   (the last 3 stay; older ones remain in `main`'s history, even with squash merges), and
   `areas/HISTORY.md` keeps one line per spec. Line limits per doc, checked in CI.
+- **Two tools, one workflow, one source.** Claude Code's files are the source; OpenCode
+  reads the same `AGENTS.md` and skill, gets its agents and config generated from Claude's
+  (checked in CI), and runs the same hooks through a small adapter plugin — guard,
+  reminder, closeout and background notices included, tested end to end on the real binary.
 - **Tests that earn their place.** Only tests that catch a bug that already happened or
   protect an invariant, with a mutation check.
 
@@ -69,7 +75,11 @@ docs/STATUS.md · GOTCHAS.md    what exists today · stack-wide traps that alrea
                                agent_guard (per-agent permissions), sdd_state
 .claude/permissions.json       what each role may edit and run, with accepted risks
 .claude/settings.json          deny rules + hook registration
-.claude/skills/sdd/            the orchestrator's manual
+.claude/skills/sdd/            the orchestrator's manual (OpenCode reads it too)
+.mcp.json                      MCP servers for both tools (Playwright)
+.opencode/plugins/sdd.js       OpenCode adapter: runs .claude/hooks; bg_run/bg_check tools
+.opencode/agents/ opencode.json  OpenCode agents + config, GENERATED (scripts/sync-opencode.mjs)
+scripts/setup.sh               prerequisites, CLIs, the MCP's browser, the OpenCode sync
 scripts/worktree.sh            isolated folder + branch + port per <area>-<slug> (or docs-<topic>)
 scripts/baseline.sh            disposable copy of main to compare before/after
 scripts/check-docs.mjs         doc line limits and at most 3 closed specs per area (CI)
@@ -80,8 +90,10 @@ scripts/verify/                guard self-test + catalog of your reusable checks
 
 ## Getting started
 
-Requirements: [Claude Code](https://claude.com/claude-code), `git`, `python3`, `node`
-and the [GitHub CLI](https://cli.github.com/) (`gh auth login`).
+Requirements: [Claude Code](https://claude.com/claude-code) and/or
+[OpenCode](https://opencode.ai), `git`, `python3`, `node` 18+ and the
+[GitHub CLI](https://cli.github.com/) (`gh auth login`). `scripts/setup.sh` checks them
+(`--cli` installs the missing agent CLIs) and installs the Playwright MCP's browser.
 
 This repo is a **template, not a project**: bootstrapping adapts its *content* (the
 `TODO`s, the `CUSTOMIZE PER PROJECT` blocks, the first areas, this README) and keeps the
@@ -89,7 +101,8 @@ rules, flow, hooks, guard and agent permissions as they are unless you ask other
 can do the steps below by hand or ask Claude Code to "bootstrap a project from this
 template" — it follows the same rule (stated at the top of `AGENTS.md`).
 
-1. Click **Use this template** on GitHub (or clone it) to create your project.
+1. Click **Use this template** on GitHub (or clone it) to create your project, then run
+   `scripts/setup.sh` (on Linux, `--with-deps` adds the browser's system libraries).
 2. Fill in every `TODO` in `AGENTS.md` (and replace its template notice with your
    project's context) — above all the **Verification** list: it's exactly what the
    implementer and reviewer run.
@@ -99,14 +112,17 @@ template" — it follows the same rule (stated at the top of `AGENTS.md`).
    - `.claude/permissions.json`: your protected scripts (`protected`) and shared-state
      commands; then `python3 scripts/verify/guard_selftest.py`;
    - `areas/workflow/README.md`: the «Resources per role» table;
-   - `scripts/check-docs.mjs`: line limits.
+   - `scripts/check-docs.mjs`: line limits;
+   - `scripts/sync-opencode.mjs`: OpenCode model per alias (`MODELS`), then run it.
 4. Add your project's jobs to `.github/workflows/ci.yml`.
 5. Create your first areas from `areas/_template/README.md` (one per subsystem; a few to
    start, 8-15 once mature — rules in `areas/README.md`) and list them in `docs/STATUS.md`.
-6. Open Claude Code in the repo and ask for your first feature. It will write
+6. Open Claude Code (`claude`) or OpenCode (`opencode`) in the repo and ask for your first
+   feature. It will write
    `areas/<area>/open/<slug>/spec.md` and wait for your OK.
 
-Agents defined in `.claude/agents/` load when a session starts; hooks apply immediately.
+Agents defined in `.claude/agents/` load when a session starts; hooks apply immediately
+(Claude Code). OpenCode loads everything at start: restart it after a change.
 
 ## Known limits
 
@@ -117,6 +133,10 @@ Agents defined in `.claude/agents/` load when a session starts; hooks apply imme
   on a feature branch takes effect once merged.
 - Features that change a **shared resource** (a single database, shared infra) run one
   at a time: worktrees isolate code, not external state.
+- OpenCode differences (see areas/workflow/README.md): no model per task call (generated
+  `implementer-haiku`/`-opus` instead), a background job's notice only reaches the main
+  session (subagents use `bg_check`), and the reminder relies on an `experimental.` plugin
+  hook — rerun `scripts/verify/opencode_e2e.mjs` after upgrading OpenCode.
 - Branch protection on GitHub isn't part of this (it needs a paid plan for private
   repos); the deny rules and the guard cover what agents can do.
 

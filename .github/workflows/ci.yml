@@ -1,4 +1,4 @@
-# Minimal CI for the workflow itself. Add your project's jobs (type check, lint, tests,
+# Minimal CI for the workflow itself (Claude Code and OpenCode). Add your project's jobs (type check, lint, tests,
 # build) below `workflow` — the agents' Verification list in AGENTS.md should match them.
 name: CI
 
@@ -26,3 +26,11 @@ jobs:
       # red/cancelled/checkless CI either; the summary stays 1 line.
       - name: pr_wait.sh self-test
         run: bash scripts/verify/pr_wait_selftest.sh
+      # OpenCode's agents and opencode.json are generated from Claude Code's (.claude/agents,
+      # settings.json, .mcp.json): a source edited without re-running the generator fails here.
+      - name: OpenCode config in sync
+        run: node scripts/sync-opencode.mjs --check
+      # The adapter that runs the hooks under OpenCode (.opencode/plugins/sdd.js), with a
+      # fake client: guard, reminder and closeout translated right; built-in mutation.
+      - name: OpenCode adapter self-test
+        run: node scripts/verify/opencode_selftest.mjs

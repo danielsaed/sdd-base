@@ -1,7 +1,7 @@
 # <Project name> — project context
 
-> **Entry point for ANY agent/AI/editor** (`AGENTS.md` standard; Claude Code reads it
-> natively, no `CLAUDE.md` needed). All context lives **in the repo** —this file, `docs/`,
+> **Entry point for ANY agent/AI/editor** (`AGENTS.md` standard; Claude Code and OpenCode
+> read it natively, no `CLAUDE.md` needed). All context lives **in the repo** —this file, `docs/`,
 > `areas/` and the code—, never in a tool's memory. Invariants only: no dated entries (that's git).
 > **Limit: 150 lines** (`scripts/check-docs.mjs`).
 
@@ -36,6 +36,8 @@ scripts/              # check-docs.mjs, worktree.sh, baseline.sh, test-hooks.sh
 scripts/verify/       # reusable checks + their catalog (README.md), guard self-test
 .claude/agents|hooks|skills   # permissioned agents, workflow hooks, skills
 .claude/permissions.json      # what each subagent may do (read by the guard hook)
+.mcp.json                     # MCP servers (Playwright…) for both tools
+.opencode/ · opencode.json    # OpenCode: plugins/sdd.js runs .claude/hooks; agents/ + json GENERATED
 TODO: your source folders
 ```
 
@@ -58,9 +60,17 @@ it for everyone): branches live in worktrees (`scripts/worktree.sh`).
 Orchestrator manual: skill `sdd`. The hooks remind the current step on every message.
 **Lightweight orchestrator:** large outputs (database queries, logs, code sweeps) are read
 by the `reader` agent, which returns the summary; waits go in ONE background process
-(`scripts/pr_wait.sh`). The user cuts the session with `/clear` whenever they want:
-everything stays written in the repo. Before that, the ritual: new user preferences →
+(`scripts/pr_wait.sh`). The user cuts the session with `/clear` (OpenCode: `/new`)
+whenever they want: everything stays written in the repo. Before that, the ritual: new user preferences →
 here; pending work → BACKLOG.
+
+## Claude Code and OpenCode: one workflow
+Both run the same flow, agents, guard, reminder, closeout, skill `sdd` and MCP servers.
+**Sources of truth are Claude Code's** (`.claude/`, `.mcp.json`); OpenCode's agents and
+`opencode.json` are generated: after editing `.claude/agents/`, `.claude/settings.json` or
+`.mcp.json`, run `node scripts/sync-opencode.mjs` (CI fails if stale). New machine:
+`scripts/setup.sh` (prerequisites, the Playwright MCP's browser, the sync). Differences
+and how each piece maps: [areas/workflow/README.md](areas/workflow/README.md#claude-code-and-opencode).
 
 > **Before touching an area**, read its README (`areas/<area>/README.md`, above all
 > «Gotchas») and [docs/GOTCHAS.md](docs/GOTCHAS.md).
@@ -81,6 +91,8 @@ TODO: adapt to your stack. The agents run exactly this list.
 6. **Tests:** only if they'd catch a bug that already happened or protect an invariant,
    with a mutation check (break the code → the test fails).
 7. `node scripts/check-docs.mjs` if you touched docs.
+8. `node scripts/sync-opencode.mjs --check` if you touched `.claude/agents`, `.claude/settings.json`
+   or `.mcp.json`; `node scripts/verify/opencode_selftest.mjs` if you touched `.opencode/plugins`.
 
 ## Documentation: map and rules
 **One fact, ONE home.** If you're about to write the same thing in two docs, write a

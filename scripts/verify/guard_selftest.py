@@ -231,6 +231,11 @@ CASES = [
     ("sed -i on a worktree's permissions.json", I, *bash(f"sed -i '' 's/a/b/' {W}/.claude/permissions.json"), "ok"),
     ("> a worktree's settings.json", I, *bash(f"echo {{}} > {W}/.claude/settings.json"), "ok"),
     ("Edit the main guard", I, *write(".claude/hooks/agent_guard.py"), "no"),
+    ("cp over the main OpenCode adapter", I, *bash("cp /tmp/x.js .opencode/plugins/sdd.js"), "no"),
+    ("> main opencode.json", I, *bash("echo {} > opencode.json"), "no"),
+    ("sed -i on a main OpenCode agent", I, *bash("sed -i 's/deny/allow/' .opencode/agents/reviewer.md"), "no"),
+    ("rm the main .mcp.json", I, *bash("rm .mcp.json"), "no"),
+    ("sed -i on a worktree's OpenCode adapter", I, *bash(f"sed -i 's/a/b/' {W}/.opencode/plugins/sdd.js"), "ok"),
     # ── Normal work passes ──
     ("tests + lint", I, *bash(f"cd {W} && make test && npx eslint . --max-warnings 0"), "ok"),
     ("git status / diff / log", I, *bash("git status && git diff main...HEAD && git log --oneline -3"), "ok"),
