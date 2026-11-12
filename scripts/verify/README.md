@@ -13,6 +13,20 @@ Run them from the root or from a feature folder.
   state only with rollback or a dry run.
 - A feature's verification goes here as a reusable script, not as a new test.
 
+## Verify just enough
+Measured upstream: ~80% of a spec's time went into verification, inflated by matrices
+and repeated builds, not by the code.
+- **Variants:** only the ones the spec touches (screen sizes, roles, inputs, configs). No
+  matrices "just in case".
+- **Where:** the implementer iterates in dev mode; **one** production build + pass, the
+  reviewer's.
+- **Caps:** a spec's verify script ≤ ~200 lines and ≤ 90 s.
+- **Mutations:** required where a test protects an invariant; in UI, at most one per spec,
+  in dev mode.
+- **Regression:** only the reviewer runs other specs' checks, once, those related to the
+  diff ([reviewer](../../.claude/agents/reviewer.md)). Waits:
+  [implementer](../../.claude/agents/implementer.md) · [reviewer](../../.claude/agents/reviewer.md).
+
 ## Workflow
 - **`guard_selftest.py`** — the subagent guard (`.claude/hooks/agent_guard.py` +
   `.claude/permissions.json`): every case against the real hook, plus mutation per rule
@@ -39,8 +53,11 @@ Run them from the root or from a feature folder.
 - **`../pr_wait.sh`** — watches a PR's CI (and, with `--merge`, only the orchestrator with
   the user's OK: merges, follows the deploy and runs your production check); one summary
   line, log in `$TMPDIR/pr_wait-N.log`. `scripts/pr_wait.sh N [--merge]` ·
-  `PR_WAIT_DEPLOY=none|github-deployments` · `PR_WAIT_DEPLOY_PATHS='^web/'` ·
-  `PR_WAIT_CHECK="…"`.
+  `PR_WAIT_DEPLOY=none|github-deployments` · `PR_WAIT_DEPLOY_PATHS='^web/'` (matched
+  against the PR's full file list; exits 3 if it can't read it) · `PR_WAIT_CHECK="…"` ·
+  `PR_WAIT_VERSION_CMD="…"` (optional, with `github-deployments`: prints on its last line
+  the commit production serves — short sha of 7+ ok, any case; the fallback when the host
+  doesn't create GitHub deployments; its rc 2 = no credentials → exit 3).
 
 ## TODO: your project's checks
 One entry per script, grouped by area (output, data, performance, security…):

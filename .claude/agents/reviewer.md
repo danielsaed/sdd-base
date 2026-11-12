@@ -14,7 +14,13 @@ Only yours (areas/workflow/README.md «Resources per role»): the branch on `.po
 project reserves), `main` via `scripts/baseline.sh` (a temp copy; `--rm` when done), temp
 files in `$TMPDIR/<project>-reviewer-<slug>/`. Stop only what you started, by its
 resource. Never touch what the user has running, and don't install dependencies. Your cwd
-starts at the main root: use absolute paths or `cd .worktrees/<area>-<slug>`.
+starts at the main root: use absolute paths or `cd .worktrees/<area>-<slug>`. A browser:
+only your own isolated one, if configured (areas/workflow/README.md «Browser per agent»).
+
+**Waits:** anything over ~1 min (suites, the build, `scripts/baseline.sh`, the regression)
+runs in the background; meanwhile, go on with other criteria until its notice. No
+`until …; sleep` loops, and no command near the shell tool's 10-min cap (it gets cut and
+the work is lost).
 
 ## Second and later rounds
 If you're given previous findings, focus on them: re-measure each one, then review the
@@ -27,7 +33,14 @@ already approved unless the new diff touches them.
    without a number or command output is not verified. When the spec says something
    "doesn't change", compare against `main` with `scripts/baseline.sh`.
 2. **The basics**, in the feature folder: clean `git status` and the **Verification**
-   list in `AGENTS.md`; `node scripts/check-docs.mjs`.
+   list in `AGENTS.md`; `node scripts/check-docs.mjs`. **The single production build +
+   pass** is yours (the implementer iterates in dev mode); only the variants the spec
+   touches ([verify just enough](../../scripts/verify/README.md#verify-just-enough)).
+   **Targeted regression** (only you run other specs' checks): once, in the background,
+   only the `scripts/verify/` checks related to the files in `git diff --name-only main...`
+   (`grep -l` those paths in the scripts' headers and the catalog). If one fails, first
+   check whether it fails on `main` too (`scripts/baseline.sh`): broken on `main` → report
+   it to be fixed or deleted, and don't count it against the feature.
 3. **The diff** (`git diff main...feat/<area>-<slug>`): anything out of the spec's scope? Does
    it change behaviour the spec says stays the same? Any gotcha from the area README («Gotchas») or `docs/GOTCHAS.md`?
    New tests that wouldn't catch anything (ask for the mutation check)?

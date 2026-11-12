@@ -11,12 +11,14 @@ lifecycle: [areas/README.md](../../../areas/README.md); roles and resources per 
 [areas/workflow/README.md](../../../areas/workflow/README.md).
 
 **Consumption** (every turn re-reads the whole context):
-- **Don't read large outputs** (database queries, logs, code sweeps): launch an agent that
-  returns the summary instead.
-- **Model per role** (each agent's `model:` header): planner and implementer `sonnet`,
-  reviewer `opus`. Launch the implementer with `model: opus` in the call if it gets stuck
-  (comes back from the reviewer with the same finding) or the spec touches a shared
-  resource or security.
+- **Don't read large outputs** (database queries, logs, code sweeps, long docs): give them
+  to the **`reader`** agent, which returns the summary — not to a generic agent, which
+  inherits your (expensive) model.
+- **Model per role** (each agent's `model:` header): reader `haiku`, planner and
+  implementer `sonnet`, reviewer `opus`. Launch the implementer with `model: haiku` in the
+  call if the task is mechanical (texts, docs, renames, copying a pattern that already
+  exists); with `model: opus` if it gets stuck (comes back from the reviewer with the same
+  finding) or the spec touches a shared resource or security.
 - **Chain background waits in ONE process** (`scripts/pr_wait.sh`, or a single loop): one
   notice at the end, never one per intermediate step.
 - **Sessions:** the user cuts them with `/clear` whenever they want. Leave everything
@@ -32,6 +34,8 @@ the flow to the user without waiting to be asked; if it's small and one-off, jus
   no port), commit (with a line at the top of `areas/HISTORY.md`), PR, green CI and OK.
   No spec, no reviewer.
 - **Question or analysis with no changes:** no spec; just answer.
+- **Bootstrapping a project from this template:** adapt the content, not the rules
+  (AGENTS.md, «This repo is a template»).
 
 ## 1. Spec  (you)
 1. **Area:** the existing one where most of the spec falls (`ls areas/`). A new area only
@@ -50,20 +54,24 @@ Launch it with the spec path. Read its summary (not the whole plan unless needed
 raises doubts, settle them with the user first. Tick `[x] 2`.
 
 ## 3. Code  (`implementer` agent(s))
-- One call per group of tasks; in **parallel** only the ones the plan marks disjoint.
+- One call per group of tasks. **Split the tasks the plan marks disjoint across several
+  implementers in parallel**: that's the norm (one implementer doing them in series
+  doubled the time).
 - Give it: the folder, the spec, the plan and ITS tasks. Not your whole context.
 - Several features in parallel = several folders. **Shared resources: one feature at a time.**
 - **Agents sharing a folder:** remind them to `git add` only their own files; you don't
   commit (least of all `commit -a`) while they run. Large tasks: one folder per agent.
-- Tell it its reserved resources (areas/workflow/README.md «Resources per role») and the checks that
-  apply ([scripts/verify/README.md](../../../scripts/verify/README.md)).
+- Tell it its reserved resources (areas/workflow/README.md «Resources per role») and the
+  checks of ITS spec ([scripts/verify/README.md](../../../scripts/verify/README.md)). Don't
+  list other specs' checks: the targeted regression is the reviewer's.
 - Read its report. If it says something couldn't be done, you decide; don't hide it. Tick `[x] 3`.
 
 ## 4. Verify  (`reviewer` agent)
 - If there's a shared change **compatible with `main`**: ask the user for OK and apply it
   now, so the reviewer measures against real state. If it would break `main`, apply it at merge.
 - Launch the reviewer with the folder and the spec. To compare with `main` it uses
-  `scripts/baseline.sh` (a temp copy), never the main checkout.
+  `scripts/baseline.sh` (a temp copy), never the main checkout. Don't list other specs'
+  checks in its prompt: it picks the regression from the diff (its own rule).
 - **NOT APPROVED** → back to step 3 with its findings (to the implementer; don't fix them
   yourself). If a finding reveals a gap in the spec, add the criterion to the spec first.
 - **Two-stage review:** the next round gets the previous findings and focuses on them

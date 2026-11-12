@@ -6,6 +6,12 @@
 # Feature working folders (scripts/worktree.sh): a copy of the repo on its branch.
 .worktrees/
 /.port
+# Folders of agents launched with `isolation: worktree`: they clean themselves up.
+.claude/worktrees/
+
+# Dumps of a Playwright MCP browser (screenshots, console logs, snapshots): one session's,
+# not the project's.
+.playwright-mcp/
 
 # Dependencies / caches
 node_modules/

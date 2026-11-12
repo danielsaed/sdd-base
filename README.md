@@ -1,9 +1,9 @@
 # sdd-base
 
 A starter repo for **spec-driven development with Claude Code**: the main session acts as
-an **orchestrator** that writes a spec, gets your OK and delegates the work to three
-permissioned subagents — **planner**, **implementer** and **reviewer** — one feature per
-branch and per pull request.
+an **orchestrator** that writes a spec, gets your OK and delegates the work to
+permissioned subagents — **planner**, **implementer** and **reviewer**, plus a cheap
+**reader** for large outputs — one feature per branch and per pull request.
 
 It's stack-agnostic: you plug in your own verification commands.
 
@@ -20,13 +20,16 @@ It's stack-agnostic: you plug in your own verification commands.
   with its why, and a self-test with mutation checks every rule in CI.
 - **Agents don't step on each other or on you.** One folder per feature (secrets linked,
   not copied), `git add` only of your own files, reserved resources per role, and
-  comparisons against `main` in a disposable copy, never in your checkout.
+  comparisons against `main` in a disposable copy, never in your checkout — which never
+  leaves `main`, since every session loads the hooks and agents from it.
 - **The orchestrator doesn't forget the rules in long sessions.** A hook re-injects the
   flow and each open spec's current step on every message, and another won't let a turn
   end with a verified-but-unclosed spec or a skipped step.
 - **Consumption is a design constraint.** Each role runs on the model its job needs
-  (planner and implementer on a cheaper one, the reviewer on the strongest); chained
-  background waits (`scripts/pr_wait.sh`) end in ONE notice instead of one per step; and
+  (the reader, and the implementer on mechanical tasks, on the cheapest; planner and
+  implementer on a cheaper one; the reviewer on the strongest); verification is "just
+  enough" (one production build, only the variants a spec touches, regression targeted at
+  the diff); chained background waits (`scripts/pr_wait.sh`) end in ONE notice instead of one per step; and
   the per-message reminder stays under 600 characters, with the rest of the rules living
   in the skill and the docs instead of repeating on every turn.
 - **Docs live next to their work.** Each subsystem is an *area* folder: how it works, its
@@ -61,7 +64,7 @@ areas/BACKLOG.md · HISTORY.md  what's next across areas · one line per closed 
 areas/_template/               area README, spec.md (5-step checklist) and plan.md
 areas/workflow/                example area: roles, permissions, resources per role
 docs/STATUS.md · GOTCHAS.md    what exists today · stack-wide traps that already bit you
-.claude/agents/                planner, implementer, reviewer
+.claude/agents/                planner, implementer, reviewer, reader
 .claude/hooks/                 reminder (every message), closeout (end of turn),
                                agent_guard (per-agent permissions), sdd_state
 .claude/permissions.json       what each role may edit and run, with accepted risks
@@ -80,9 +83,16 @@ scripts/verify/                guard self-test + catalog of your reusable checks
 Requirements: [Claude Code](https://claude.com/claude-code), `git`, `python3`, `node`
 and the [GitHub CLI](https://cli.github.com/) (`gh auth login`).
 
+This repo is a **template, not a project**: bootstrapping adapts its *content* (the
+`TODO`s, the `CUSTOMIZE PER PROJECT` blocks, the first areas, this README) and keeps the
+rules, flow, hooks, guard and agent permissions as they are unless you ask otherwise. You
+can do the steps below by hand or ask Claude Code to "bootstrap a project from this
+template" — it follows the same rule (stated at the top of `AGENTS.md`).
+
 1. Click **Use this template** on GitHub (or clone it) to create your project.
-2. Fill in every `TODO` in `AGENTS.md` — above all the **Verification** list: it's
-   exactly what the implementer and reviewer run.
+2. Fill in every `TODO` in `AGENTS.md` (and replace its template notice with your
+   project's context) — above all the **Verification** list: it's exactly what the
+   implementer and reviewer run.
 3. Adjust the `CUSTOMIZE PER PROJECT` blocks:
    - `scripts/worktree.sh`: shared files to link, dependency folders to clone, base port;
    - `scripts/baseline.sh`: what runs in the copy of `main` (`run_baseline`);

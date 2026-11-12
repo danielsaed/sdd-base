@@ -4,7 +4,10 @@
 An agent's `tools:` decides WHICH tools it has; this decides WHAT it may do with them (the
 terminal can't be narrowed from `tools:`). Claude Code passes `agent_type` when the call
 comes from a subagent; without it, it's the main session (the orchestrator), governed by
-the `deny` rules in settings.json and by asking the user for OK.
+the `deny` rules in settings.json and by asking the user for OK. ONE exception applies to
+everyone, the main session included: the project's main checkout never leaves the main
+branch (`main_checkout_off_main`): every session loads hooks, guard, agents and scripts
+from it, so one session switching it moves all the others (two chats crossed like this).
 
 WHAT IT PROTECTS AND WHAT IT DOESN'T: it stops MISTAKES by cooperative agents (pushing,
 merging, running shared-state scripts, reading secrets, deleting outside their folder, the
@@ -31,7 +34,9 @@ or xargs' stdin) all count as present, so a subagent can't slip it past the rule
 Before changing rules, measure them on real commands: `guard_selftest.py --corpus`.
 
 Deny = exit 2 + reason on stderr (the agent reads it and corrects itself). Self-test:
-`python3 scripts/verify/guard_selftest.py` (in CI). `--permissions <path>` only for it.
+`python3 scripts/verify/guard_selftest.py` (in CI). `--permissions <path>` and
+`--no-main-rule` (per-role cases mustn't depend on whether the root is the main checkout,
+as in CI, or a worktree) only for it.
 """
 import fnmatch
 import json
@@ -40,6 +45,9 @@ import re
 import shlex
 import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sdd_state import MAIN_BRANCH, git, main_checkout  # noqa: E402
 
 PERMISSIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "permissions.json")
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -618,9 +626,88 @@ def matches(r, c):
     return True
 
 
-def decide(d, perms, root):
-    """→ None if allowed; otherwise the reason. Pure: the self-test calls it in-process too."""
+# ── The main checkout never leaves the main branch (everyone, main session included) ──
+
+MAIN_CHECKOUT_REASON = (
+    "the main checkout is shared by every session (hooks, guard, agents and scripts load from "
+    f"it): it ALWAYS stays on {MAIN_BRANCH}. To work on a branch, use your own folder: "
+    "scripts/worktree.sh <area>-<slug> | docs-<topic> (creates .worktrees/<name>). To restore "
+    "files: git checkout -- <file> (or git restore).")
+NEW_BRANCH = {"-c", "-C", "-b", "-B", "--create", "--force-create", "--orphan", "--detach", "-d", "-"}
+
+
+def leaves_main(c):
+    """`git switch|checkout` that leaves the folder on another branch or commit: a target
+    other than the main branch, a new or orphan branch, a detached HEAD, `-` (the previous
+    branch; also as short clusters `-qb x`, `-cx` or `--create=x`). Going to the main branch,
+    `git checkout -- file` and `git checkout .` (restoring files) don't count."""
+    a = c.argv
+    if len(a) < 2 or a[0] != "git" or a[1] not in ("switch", "checkout"):
+        return False
+    rest = a[2:]
+    if "--" in rest:
+        return False
+    if any(t in NEW_BRANCH or t.startswith(("--create=", "--force-create=", "--orphan="))
+           or re.fullmatch(r"-[a-zA-Z]*[bBcCd].*", t) for t in rest):
+        return True
+    targets = [t for t in rest if not t.startswith("-")]
+    return bool(targets) and targets not in ([MAIN_BRANCH], ["."])
+
+
+def folder_of(c):
+    """Where the git acts: `git -C <dir>` (chainable, relative to the command's folder) or
+    the command's own folder (after its `cd`s)."""
+    base = c.cwd or CTX["cwd"] or CTX["root"]
+    a, i = c.raw, 1
+    while i < len(a) and a[i].startswith("-"):
+        if a[i] == "-C" and i + 1 < len(a):
+            base = os.path.join(base, os.path.expanduser(a[i + 1]))
+            i += 2
+        elif a[i] in ("-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"):
+            i += 2
+        else:
+            i += 1
+    return base
+
+
+def is_main_checkout(folder):
+    """Is `folder` inside THIS project's main checkout (the one CTX["root"] belongs to), not in
+    one of its worktrees? Another repo's main checkout doesn't count: `git -C ~/other-repo
+    switch -c x` has nothing to do with this project, so the rule mustn't fire there."""
+    # `mkdir -p s && cd s && git switch -c x`: `s` doesn't exist yet when judged; its parent counts.
+    folder = os.path.abspath(folder)
+    while not os.path.isdir(folder) and os.path.dirname(folder) != folder:
+        folder = os.path.dirname(folder)
+    top = git("rev-parse", "--show-toplevel", cwd=folder)
+    main = main_checkout(CTX["root"])
+    return bool(top and main) and os.path.realpath(top) == main
+
+
+def main_checkout_off_main(line):
+    """The reason if some command of `line` moves this project's main checkout off the main
+    branch; otherwise None. Applies to EVERYONE: it was a main session that crossed another."""
+    try:
+        cmds = list(commands(line))
+    except Denied:
+        return None  # what can't be analyzed is judged by the other rules (for the main session: none)
+    for c in cmds:
+        if leaves_main(c) and is_main_checkout(folder_of(c)):
+            return MAIN_CHECKOUT_REASON
+    return None
+
+
+def decide(d, perms, root, main_rule=True):
+    """→ None if allowed; otherwise the reason. Pure: the self-test calls it in-process too.
+    `main_rule=False` (only the self-test, `--no-main-rule`): its per-role cases mustn't depend
+    on whether the root is the main checkout (CI) or a worktree (local)."""
     agent = d.get("agent_type") or ""
+    tool, inp = d.get("tool_name", ""), d.get("tool_input") or {}
+    CTX["root"], CTX["cwd"] = root, os.path.realpath(d.get("cwd") or root)
+    CTX["line"] = inp.get("command", "") if tool == "Bash" else ""
+    if main_rule and tool == "Bash":
+        reason = main_checkout_off_main(inp.get("command", ""))
+        if reason:
+            return reason
     if not d.get("agent_id") and not agent:
         return None  # main session
     if perms is None:
@@ -628,9 +715,6 @@ def decide(d, perms, root):
     roles = perms["roles"]
     role = roles.get(agent, roles["*"])
     role = roles[role] if isinstance(role, str) else role
-    tool, inp = d.get("tool_name", ""), d.get("tool_input") or {}
-    CTX["root"], CTX["cwd"] = root, os.path.realpath(d.get("cwd") or root)
-    CTX["line"] = inp.get("command", "") if tool == "Bash" else ""
 
     if tool in EDIT_TOOLS:
         raw = inp.get("file_path") or inp.get("notebook_path") or ""
@@ -667,9 +751,10 @@ def main():
     except Exception:
         sys.exit(0)
     root = os.path.realpath(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-    reason = decide(d, load(path), root)
+    reason = decide(d, load(path), root, main_rule="--no-main-rule" not in sys.argv)
     if reason:
-        print(f"[guard · {d.get('agent_type') or 'subagent'}] Blocked: {reason}", file=sys.stderr)
+        who = d.get("agent_type") or ("subagent" if d.get("agent_id") else "main session")
+        print(f"[guard · {who}] Blocked: {reason}", file=sys.stderr)
         sys.exit(2)
     sys.exit(0)
 

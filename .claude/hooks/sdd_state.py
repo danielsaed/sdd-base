@@ -12,7 +12,25 @@ import re
 import subprocess
 
 ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-MAIN_BRANCH = os.environ.get("SDD_MAIN_BRANCH", "main")  # env override: used by scripts/test-hooks.sh
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _main_branch():
+    """The main branch's name lives in ONE place: the CUSTOMIZE block of scripts/worktree.sh
+    (baseline.sh reads it too). SDD_MAIN_BRANCH overrides it (used by scripts/test-hooks.sh)."""
+    if os.environ.get("SDD_MAIN_BRANCH"):
+        return os.environ["SDD_MAIN_BRANCH"]
+    try:
+        with open(os.path.join(HERE, "..", "..", "scripts", "worktree.sh"), encoding="utf-8") as f:
+            m = re.search(r'^MAIN_BRANCH="([^"]+)"', f.read(), re.M)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return "main"
+
+
+MAIN_BRANCH = _main_branch()
 STEPS = ["spec approved", "plan", "code", "verified",
          "close (docs + spec to done/ + HISTORY) and PR"]
 MAX_AREAS = 15  # healthy range 8-15 (areas/README.md)
@@ -24,6 +42,13 @@ def git(*args, cwd=ROOT):
         return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=5).stdout.strip()
     except Exception:
         return ""
+
+
+def main_checkout(cwd=ROOT):
+    """Real path of the project's MAIN checkout (git lists it first, also when asked from a
+    worktree), or "" outside a repo. Every session loads hooks, guard and scripts from it."""
+    first = git("worktree", "list", "--porcelain", cwd=cwd).split("\n", 1)[0]
+    return os.path.realpath(first[len("worktree "):]) if first.startswith("worktree ") else ""
 
 
 def worktrees():

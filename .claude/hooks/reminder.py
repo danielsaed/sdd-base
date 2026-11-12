@@ -6,7 +6,8 @@ skipped (delegating, asking for the OK, closing docs). This re-injects the step 
 spec is at and what gets forgotten most. It goes into the context of EVERY message, so
 it's short (<= 600 characters with 1 open spec + 1 pending PR, measured by
 scripts/test-hooks.sh): the rest of the rules live in the skill `sdd` and areas/README.md.
-State lines (spec + step, PR to merge, docs mode, dirty main) are never trimmed.
+State lines (spec + step, PR to merge, docs mode, main checkout off the main branch, dirty
+main) are never trimmed.
 """
 import json
 import os
@@ -14,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from sdd_state import (KEEP_DONE, MAIN_BRANCH, MAX_AREAS, STEPS, areas, closed_unmerged_branches,  # noqa: E402
-                       crowded_done, current_step, git, open_specs, split_name)
+                       crowded_done, current_step, git, main_checkout, open_specs, split_name)
 
 try:
     json.load(sys.stdin)
@@ -47,6 +48,15 @@ if n_areas > MAX_AREAS:
     lines.append(f"· ⚠ {n_areas} areas (healthy: 8-{MAX_AREAS}): propose to the user which to merge (areas/README.md «When to create an area»).")
 for a, n in crowded_done():
     lines.append(f"· ⚠ areas/{a}/done/ has {n} specs: keep the {KEEP_DONE} most recent (git history keeps the rest).")
+# The main checkout is shared by EVERY session: off the main branch, everyone's hooks, guard
+# and scripts run from another branch (two chats crossed like this). It's the main checkout
+# that is checked, not the cwd: a session in a worktree sees it too.
+main_dir = main_checkout()
+if main_dir:
+    on = git("branch", "--show-current", cwd=main_dir)
+    if on != MAIN_BRANCH:  # mutation: main-off
+        lines.append(f"· ⚠ Main checkout on «{on or 'a detached commit'}», not {MAIN_BRANCH}: all sessions share it "
+                     "→ switch it back; branches go in .worktrees/ (scripts/worktree.sh).")
 if git("branch", "--show-current") == MAIN_BRANCH and git("status", "--porcelain"):
     lines.append(f"· ⚠ Uncommitted changes on {MAIN_BRANCH}: use a feat/<area>-<slug> or docs/<topic> branch + PR.")
 lines += [

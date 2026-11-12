@@ -16,7 +16,9 @@ The problem today, with a measured number if there is one (1-4 lines).
 What the user will notice. What does NOT change (data freshness, caching, behaviour).
 
 ## Acceptance criteria
-Each one measurable, with HOW it's checked (script or command).
+Each one measurable, with HOW it's checked (script or command). **Verify just enough**:
+only the variants this spec touches, script ≤ ~200 lines and ≤ 90 s, no matrices
+([rule](../../../../scripts/verify/README.md#verify-just-enough)).
 - [ ] …  → `command that proves it`
 - [ ] …
 
