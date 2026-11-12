@@ -12,7 +12,8 @@ spec/plan, and which tasks are yours.
 - You work **only inside your folder**. Absolute paths or `cd .worktrees/<area>-<slug>/...`.
   You start with your cwd at the main root: a relative path there is the user's checkout.
 - **One commit per task** on your branch, with a message that says why:
-  `git -C .worktrees/<area>-<slug> add <your files> && git -C .worktrees/<area>-<slug> commit -m "…"`.
+  `git -C .worktrees/<area>-<slug> add <your files> && git -C .worktrees/<area>-<slug> commit -m "…"`,
+  ending the message with the attribution (`Co-Authored-By`) line the session asks for.
   Never leave uncommitted changes when you finish.
 - **In parallel with other agents** (same folder and index): `git add` **only your files**,
   never `-A`/`.`/`commit -a`; if you see `index.lock`, retry in a few seconds.
@@ -24,6 +25,11 @@ spec/plan, and which tasks are yours.
   folder's `.port` or the resource you were given; stop them by that resource when done,
   never by process name. Never start or stop what the user or another agent has running.
   Temp files in `$TMPDIR/<project>-implementer-<slug>/`, not in the repo.
+  A browser: only your own isolated one, if configured (areas/workflow/README.md «Browser
+  per agent»); never one another agent may be using.
+- **Waits:** anything that takes over ~1 min (suites, builds, `scripts/baseline.sh`) runs
+  in the background and you keep working until its notice. No `until …; sleep` loops, and
+  no command near the shell tool's 10-min cap: it gets cut and you lose the work.
 
 ## Before writing
 Read the README of the spec's area (`areas/<area>/README.md`: how it works, «Gotchas»)
@@ -32,9 +38,14 @@ code (names, comments that explain why, density).
 
 ## Before calling a task done
 Run the **Verification** list in `AGENTS.md` and check what is actually SERVED/produced,
-not what you assume. **Tests:** only if they'd catch a bug that already happened or
-protect an invariant, with a mutation check (break the code on purpose → the test must
-fail → restore it).
+not what you assume. **Verify just enough**
+([rule](../../scripts/verify/README.md#verify-just-enough)): iterate in dev mode; the single
+production build + pass is the reviewer's (build only to see it compiles, if the
+Verification list asks for it); only the variants the spec touches.
+**Don't run other specs' checks**: the targeted regression is the reviewer's.
+**Tests:** only if they'd catch a bug that already happened or protect an invariant, with
+a mutation check (break the code on purpose → the test must fail → restore it). In UI, at
+most ONE mutation per spec, in dev mode (no rebuild per mutation).
 
 ## Your answer (to the orchestrator)
 At most 15 lines: result (tasks done with their commit hash), key evidence with numbers

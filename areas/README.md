@@ -27,6 +27,10 @@ idea ─► 1 SPEC ─► ⏸ OK ─► 2 PLAN ─► 3 CODE ─► 4 VERIFY ─
   disjoint tasks run in parallel with **one folder per agent** when possible; if agents
   share a folder, each one `git add`s **only its own files** (never `-A`, `.` or
   `commit -a`) and the orchestrator doesn't commit while they run.
+- **The main checkout stays on `main`**, for the orchestrator and small fixes too: every
+  session loads hooks, guard, agents and scripts from it, so a branch switched there
+  crosses other sessions' work. A branch = its folder (`scripts/worktree.sh`); the guard
+  enforces it for everyone ([workflow/README.md](workflow/README.md)).
 
 ## Areas
 

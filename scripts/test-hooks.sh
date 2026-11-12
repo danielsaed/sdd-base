@@ -68,8 +68,23 @@ close pass '{}' "fresh spec"
 # Dirty main is a state line too: it must survive in the reminder, not just block closeout.
 echo x > "$T/stray.txt"
 remind | grep -q "⚠ Uncommitted changes on main" || bad "reminder doesn't warn about uncommitted changes on main"
-close block '{}' "uncommitted changes on main"
+close block '{}' "uncommitted changes on main" "worktree.sh"
+(cd "$T" && echo '{}' | python3 "$H/closeout.py" 2>&1) | grep -qF "git switch -c" \
+  && bad "closeout still recommends git switch -c (the main checkout never leaves main)"
 rm "$T/stray.txt"
+# ── ⚠ the main checkout off the main branch (seen from a worktree too) ──
+remind | grep -qF "Main checkout on «" && bad "reminder warns about the main checkout while it's on main"
+g "$T" switch -q -c other-branch
+remind | grep -qF "Main checkout on «other-branch»" || bad "reminder doesn't warn about the main checkout off main"
+len2=$(remind | length); [ "$len2" -le $MAX ] || bad "reminder with 1 open spec + 1 pending PR + main checkout off main: $len2 characters (cap $MAX)"
+(cd "$D" && echo '{}' | CLAUDE_PROJECT_DIR="$D" python3 "$H/reminder.py") | grep -qF "Main checkout on «other-branch»" \
+  || bad "from a worktree, the reminder doesn't warn about the main checkout off main"
+sed 's/^\( *\)if on != MAIN_BRANCH:  # mutation: main-off$/\1if False:/' "$H/reminder.py" > "$H/reminder-mutant.py"
+grep -q '^ *if False:$' "$H/reminder-mutant.py" || bad "mutation «main-off»: couldn't build the mutant"
+(cd "$T" && echo '{}' | python3 "$H/reminder-mutant.py") | grep -qF "Main checkout on «" \
+  && bad "mutation «main-off»: without the check the warning still shows (the test doesn't cover it)"
+rm -f "$H/reminder-mutant.py"
+g "$T" switch -q main
 # A docs/… branch with a commit (docs mode) is a state line too, kept across the trim.
 wt docs-notes >/dev/null
 echo n > "$WT/docs-notes/n.txt"; g "$WT/docs-notes" add n.txt; g "$WT/docs-notes" commit -qm n

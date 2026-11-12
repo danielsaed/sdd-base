@@ -18,21 +18,30 @@
 #   PR_WAIT_DEPLOY=github-deployments   follow the merge commit's GitHub Deployments API
 #     (any provider that creates one per commit: e.g. Vercel, Render, Fly).
 #   PR_WAIT_DEPLOY_PATHS='^web/'        skip the deploy wait when the PR touches no path
-#     matching this regex ("" = the deploy applies regardless of which files changed).
+#     matching this regex ("" = the deploy applies regardless of which files changed). The
+#     PR's full file list is read (paginated); if it can't be read → exit 3, never "no match".
+#   PR_WAIT_VERSION_CMD="node scripts/verify/served_version.mjs"   fallback for providers
+#     that deploy but DON'T create a GitHub deployment: while there's none, this command is
+#     polled until it prints (last line of stdout) the commit production serves and it
+#     equals the merge commit (case-insensitive; a short sha of >= 7 characters counts).
+#     Its exit 2 means "no credentials to ask" and is reported as such (exit 3). Only with
+#     PR_WAIT_DEPLOY=github-deployments. "" (default) = feature off.
 #   PR_WAIT_CHECK="node scripts/verify/your_production_check.mjs"   your production check;
 #     it loads its own secrets — this script never touches one. "" = don't check production.
 # An ENOTFOUND/EAI_AGAIN from PR_WAIT_CHECK is reported as this machine's local DNS, not
 # production being down: retried a few times and called out separately in the summary.
 #
-# Exit: 0 all good (or "local DNS") · 1 CI not green · 2 merge failed · 3 deploy failed or
-# didn't finish in time · 4 production check failed · 64 usage. `gh` is resolved on PATH
-# (the self-test fakes it: scripts/verify/pr_wait_selftest.sh).
+# Exit: 0 all good (or "local DNS") · 1 CI not green · 2 merge failed · 3 deploy failed,
+# didn't finish in time, the PR's file list couldn't be read, or PR_WAIT_VERSION_CMD had no
+# credentials · 4 production check failed · 64 usage. `gh` is resolved on PATH (the
+# self-test fakes it: scripts/verify/pr_wait_selftest.sh).
 set -uo pipefail
 
 # ── Configuration (the environment wins) ──
 PR_WAIT_DEPLOY="${PR_WAIT_DEPLOY:-none}"                # none | github-deployments
 PR_WAIT_CHECK="${PR_WAIT_CHECK:-}"                       # "" = don't check production
 PR_WAIT_DEPLOY_PATHS="${PR_WAIT_DEPLOY_PATHS:-}"         # regex of paths that trigger a deploy; "" = any
+PR_WAIT_VERSION_CMD="${PR_WAIT_VERSION_CMD:-}"           # prints the served commit; "" = off
 PR_WAIT_DEPLOY_TIMEOUT="${PR_WAIT_DEPLOY_TIMEOUT:-900}"  # seconds (~15 min)
 PR_WAIT_SLEEP="${PR_WAIT_SLEEP:-20}"                     # between polls
 PR_WAIT_CHECKS_TIMEOUT="${PR_WAIT_CHECKS_TIMEOUT:-180}"  # until the CI checks show up
@@ -54,6 +63,13 @@ exec 3>&1 >>"$LOG" 2>&1          # everything goes to the log; the summary uses 
 ci="?"; mg="not merged"; dep="—"; prod="—"
 finish() { echo "PR #$N · CI $ci · $mg · deploy $dep · prod $prod  (log: $LOG)" >&3; exit "$1"; }
 log() { echo "[$(date +%H:%M:%S)] $*"; }
+# Same commit? Case-insensitive and accepting a short sha (one starts with the other), with
+# at least 7 characters: a shorter prefix would match almost anything.
+same_sha() {
+  local a b; a=$(tr 'A-Z' 'a-z' <<<"$1"); b=$(tr 'A-Z' 'a-z' <<<"$2")
+  [[ "$a" =~ ^[0-9a-f]{7,40}$ && "$b" =~ ^[0-9a-f]{7,40}$ ]] || return 1
+  [[ "$a" == "$b"* || "$b" == "$a"* ]]
+}
 
 # ── 1. CI ──
 # Right after the push the checks take a moment to register, and `gh pr checks --watch`
@@ -92,29 +108,46 @@ mg="merged"
 
 # ── 3. Deploy ──
 if [ "$PR_WAIT_DEPLOY" != github-deployments ]; then dep="not tracked"
-elif [ -n "$PR_WAIT_DEPLOY_PATHS" ] && ! gh pr view "$N" --json files -q '.files[].path' | grep -qE "$PR_WAIT_DEPLOY_PATHS"; then
+# The list is read WHOLE before searching it: with `gh … | grep -q` (which stops at the first
+# match) under pipefail, gh died of SIGPIPE and the script said "no matching path" exactly
+# when there WAS one. And `gh pr view --json files` only returns 100 files: the paginated
+# API returns them all.
+elif [ -n "$PR_WAIT_DEPLOY_PATHS" ] && ! files=$(gh api "repos/{owner}/{repo}/pulls/$N/files" --paginate -q '.[].filename'); then  # mutation: files-list
+  dep="couldn't read the PR's file list"; finish 3
+elif [ -n "$PR_WAIT_DEPLOY_PATHS" ] && ! grep -qE "$PR_WAIT_DEPLOY_PATHS" <<<"$files"; then  # mutation: files-grep
   dep="not applicable (no matching path)"
 else
   sha=$(gh pr view "$N" --json mergeCommit -q .mergeCommit.oid); log "commit $sha"
-  id=""; state=""; t0=$SECONDS
+  id=""; state=""; served=""; t0=$SECONDS
+  verr="$LOG.version-stderr"
   while [ $((SECONDS - t0)) -lt "$PR_WAIT_DEPLOY_TIMEOUT" ]; do
     [ -n "$id" ] || id=$(gh api "repos/{owner}/{repo}/deployments?sha=$sha" -q '.[0].id // empty' 2>/dev/null)
     if [ -n "$id" ]; then
       state=$(gh api "repos/{owner}/{repo}/deployments/$id/statuses" -q '.[0].state // empty' 2>/dev/null)
       log "deployment $id: ${state:-no state}"
       case "$state" in success|failure|error) break ;; esac
+    elif [ -n "$PR_WAIT_VERSION_CMD" ]; then
+      # No GitHub deployment (the provider deploys without creating one): ask production
+      # which commit it serves. Its stderr goes to the log; exit 2 = no credentials.
+      out=$(bash -c "$PR_WAIT_VERSION_CMD" 2>"$verr"); vrc=$?; cat "$verr"
+      served=$(printf '%s' "$out" | tail -n 1 | tr -d '[:space:]')   # its last line
+      if [ $vrc = 2 ]; then state="no credentials: $({ head -c 200 "$verr"; printf %s "${out:0:200}"; } | tr '\n' ' ')"; break; fi  # mutation: creds
+      log "no deployment; served version: ${served:-?} (rc $vrc)"
+      if [ $vrc = 0 ] && same_sha "$served" "$sha"; then state=version; break; fi  # mutation: version
     else log "no deployment yet"; fi
     sleep "$PR_WAIT_SLEEP"
   done
   case "$state" in
+    version) dep="ok (served version)" ;;
     success) dep="ok" ;;
+    "no credentials"*) dep="DIDN'T FINISH: PR_WAIT_VERSION_CMD couldn't ask production (${state})"; finish 3 ;;
     failure|error) dep="FAILED ($state)"; finish 3 ;;
-    *) dep="DIDN'T FINISH after ${PR_WAIT_DEPLOY_TIMEOUT}s (${state:-no deployment})"; finish 3 ;;
+    *) dep="DIDN'T FINISH after ${PR_WAIT_DEPLOY_TIMEOUT}s (${state:-no deployment}${served:+; production serves $served})"; finish 3 ;;
   esac
 fi
 
 # ── 4. Production ── (only if there was a deploy: without one, nothing changed)
-if [ "$dep" != ok ] || [ -z "$PR_WAIT_CHECK" ]; then prod="not checked"; finish 0; fi
+if [[ "$dep" != ok* ]] || [ -z "$PR_WAIT_CHECK" ]; then prod="not checked"; finish 0; fi
 for i in 1 2 3; do
   out=$(bash -c "$PR_WAIT_CHECK" 2>&1); rc=$?; echo "$out"
   [ $rc = 0 ] && { prod="ok"; finish 0; }

@@ -4,8 +4,13 @@
 > natively, no `CLAUDE.md` needed). All context lives **in the repo** —this file, `docs/`,
 > `areas/` and the code—, never in a tool's memory. Invariants only: no dated entries (that's git).
 > **Limit: 150 lines** (`scripts/check-docs.mjs`).
->
-> 👉 Fill in every `TODO` below when you bootstrap a project from this template.
+
+> 👉 **This repo is a TEMPLATE (a skeleton), not a project.** Asked to start, bootstrap or
+> initialize a project from it, an agent **adapts the content** to that project: every
+> `TODO` (what it is, author, stack, how to run, verification commands, docs map), the
+> `CUSTOMIZE PER PROJECT` blocks, the first areas and `README.md`. It does **not** change
+> the rules, the flow, the hooks, the guard, the agents' permissions or the workflow unless
+> the user explicitly asks. Once bootstrapped, this notice is replaced by the real context.
 
 ## What it is
 TODO: one paragraph — what the product is, for whom, and what matters most.
@@ -47,10 +52,12 @@ the OK and delegates; it doesn't code what it can delegate.
 
 Hard rules: shared resources (single DB, infra) are **not** parallelized; only the
 orchestrator applies shared changes, with OK; nothing reaches `main` without a PR;
-creating, splitting or merging an area needs the user's OK.
+creating, splitting or merging an area needs the user's OK; the main checkout **never
+leaves `main`** (every session loads hooks, guard and agents from it; the guard enforces
+it for everyone): branches live in worktrees (`scripts/worktree.sh`).
 Orchestrator manual: skill `sdd`. The hooks remind the current step on every message.
 **Lightweight orchestrator:** large outputs (database queries, logs, code sweeps) are read
-by an agent that returns the summary; waits go in ONE background process
+by the `reader` agent, which returns the summary; waits go in ONE background process
 (`scripts/pr_wait.sh`). The user cuts the session with `/clear` whenever they want:
 everything stays written in the repo. Before that, the ritual: new user preferences →
 here; pending work → BACKLOG.
@@ -69,7 +76,8 @@ TODO: adapt to your stack. The agents run exactly this list.
 2. Lint with zero warnings: `TODO`
 3. Tests: `TODO`
 4. Build, if routes/config/caching changed: `TODO`
-5. Check what is actually SERVED/produced, not what you assume (curl, a diff script…).
+5. Check what is actually SERVED/produced, not what you assume (curl, a diff script…),
+   and [just enough](scripts/verify/README.md#verify-just-enough).
 6. **Tests:** only if they'd catch a bug that already happened or protect an invariant,
    with a mutation check (break the code → the test fails).
 7. `node scripts/check-docs.mjs` if you touched docs.

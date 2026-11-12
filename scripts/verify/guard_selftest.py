@@ -9,10 +9,17 @@ Every such case is measured here, plus one per rule.
 
 It runs THIS checkout's guard by path (not the one loaded in Claude Code, which is the
 main checkout's), as a subprocess, with the JSON Claude Code sends (`agent_type`,
-`agent_id`, `tool_name`, `tool_input`, `cwd`); exit 0 = allowed, 2 = blocked.
+`agent_id`, `tool_name`, `tool_input`, `cwd`); exit 0 = allowed, 2 = blocked. The
+per-role cases run with `--no-main-rule`, so they don't depend on whether the root is the
+main checkout (CI) or a worktree (local); the fixed rule "the main checkout never leaves
+the main branch" has its own cases in throwaway repos (this project's main checkout, one of
+its worktrees, and ANOTHER repo, which the rule must leave alone).
 
 Built-in mutation: for every `id` in permissions.json (commands, never_edit) it reruns the
 cases WITHOUT that rule (in-process, fast); if no case changes, the rule has no test → fail.
+Same for every role of a rule shared by several roles (e.g. reviewer + reader): removing
+one role from it must change some case. And the main-checkout rule: removed, judging any
+repo's main checkout, or not climbing to an existing parent — each must break a case.
 Mutation check of this test itself (done when writing it): removing the `-C dir` skip in
 agent_guard.git_normal → «git -C folder push» fails; deleting a rule from permissions.json
 → its case fails.
@@ -42,7 +49,7 @@ HOOK = os.path.join(ROOT, ".claude", "hooks", "agent_guard.py")
 PERMISSIONS = os.path.join(ROOT, ".claude", "permissions.json")
 W = ".worktrees/workflow-x"
 P_SCRIPT = "scripts/apply-shared-change.sh"  # matches `protected` in permissions.json
-I, R, PL = "implementer", "reviewer", "planner"
+I, R, PL, RD = "implementer", "reviewer", "planner", "reader"
 
 
 def bash(c):
@@ -282,6 +289,23 @@ CASES = [
     ("reviewer removes a link (not its target) in /tmp", R, *bash(f"rm {LINKS}/link-to-repo"), "ok"),
     ("reviewer: /tmp/link-to-repo/x isn't temporary", R, *bash(f"touch {LINKS}/link-to-repo/x.py"), "no"),
     ("reviewer worktree.sh", R, *bash("scripts/worktree.sh 999-x"), "no"),
+    # ── Reader: the same read-only rules as the reviewer (one case per reviewer-* rule) ──
+    ("reader edits", RD, *write(f"{W}/src/a.py"), "no"),
+    ("reader git add", RD, *bash("git add x"), "no"),
+    ("reader git checkout branch", RD, *bash("git checkout feat/x"), "no"),
+    ("reader sed -i", RD, *bash("sed -i '' 's/a/b/' src/a.py"), "no"),
+    ("reader perl -pi", RD, *bash("perl -pi -e 's/a/b/' src/a.py"), "no"),
+    ("reader tee", RD, *bash("ls | tee out.txt"), "no"),
+    ("reader rm", RD, *bash("rm src/a.py"), "no"),
+    ("reader cp inside the repo", RD, *bash("cp src/a.py src/b.py"), "no"),
+    ("reader worktree.sh", RD, *bash("scripts/worktree.sh 999-x"), "no"),
+    ("reader --fix", RD, *bash("npx eslint src --fix"), "no"),
+    ("reader > file", RD, *bash("echo x > f.txt"), "no"),
+    ("reader npm ci", RD, *bash("npm ci"), "no"),
+    ("reader cat .env", RD, *bash("cat .env"), "no"),
+    ("reader grep | tail", RD, *bash("grep -n x src/a.py | tail -5"), "ok"),
+    ("reader > /tmp", RD, *bash("make report > /tmp/sdd-reader/r.txt"), "ok"),
+    ("reader cp to /tmp", RD, *bash("cp src/a.py /tmp/sdd-reader/a.py"), "ok"),
     # ── pr_wait.sh: watching the CI is fine; --merge (merging) is the orchestrator's ──
     ("pr_wait --merge", I, *bash("scripts/pr_wait.sh 30 --merge"), "no"),
     ("bash pr_wait --mer (abbreviated)", I, *bash("bash scripts/pr_wait.sh 30 --mer"), "no"),
@@ -327,11 +351,13 @@ def payload(agent, tool, inp, root):
     return d
 
 
-def run_hook(d, root, perms=None, hook=HOOK):
-    """Exit code of the real guard (subprocess), the way Claude Code calls it."""
-    cmd = [sys.executable, hook] + (["--permissions", perms] if perms else [])
+def run_hook(d, root, perms=None, hook=HOOK, main_rule=True, env=None):
+    """Exit code of the real guard (subprocess), the way Claude Code calls it. `main_rule=False`
+    adds --no-main-rule: per-role cases don't depend on whether the root is the main checkout."""
+    cmd = ([sys.executable, hook] + (["--permissions", perms] if perms else [])
+           + ([] if main_rule else ["--no-main-rule"]))
     r = subprocess.run(cmd, input=json.dumps(d), capture_output=True, text=True,
-                       env=dict(os.environ, CLAUDE_PROJECT_DIR=root), timeout=20)
+                       env=dict(os.environ, CLAUDE_PROJECT_DIR=root, **(env or {})), timeout=20)
     return r.returncode, r.stderr.strip()
 
 
@@ -370,6 +396,57 @@ def corpus(path, old, old_root, out):
     return 0
 
 
+def main_checkout_repos(tmp):
+    """Throwaway repos: `repo` (this "project's" main checkout, on main) with a worktree in
+    repo/.worktrees/x (the real layout), `other` (ANOTHER repo's main checkout, unrelated) and
+    `trunk` (a project whose main branch is called trunk). → (repo, worktree, other, trunk)."""
+    rp, wt = os.path.join(tmp, "repo"), os.path.join(tmp, "repo", ".worktrees", "x")
+    other, trunk = os.path.join(tmp, "other"), os.path.join(tmp, "trunk")
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")
+    for args in (["init", "-q", "-b", "main", rp], ["-C", rp, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"],
+                 ["-C", rp, "worktree", "add", "-q", "-b", "feat/x", wt],
+                 ["init", "-q", "-b", "main", other], ["-C", other, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"],
+                 ["init", "-q", "-b", "trunk", trunk], ["-C", trunk, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"]):
+        subprocess.run(["git", *args], check=True, capture_output=True, env=env)
+    return tuple(os.path.realpath(p) for p in (rp, wt, other, trunk))
+
+
+def main_checkout_cases(rp, wt, other):
+    # (description, agent | None = main session, cwd, command, "ok" | "no"); the root is `rp`.
+    return [
+        ("main: git switch -c x", None, rp, "git switch -c x", "no"),
+        ("main: git checkout feat/x", None, rp, "git checkout feat/x", "no"),
+        ("main: git switch - (the previous branch)", None, rp, "git switch -", "no"),
+        ("main: git checkout -qb x (short cluster)", None, rp, "git checkout -qb x", "no"),
+        ("main: git switch --create=x", None, rp, "git switch --create=x", "no"),
+        ("main: git checkout --detach", None, rp, "git checkout --detach", "no"),
+        ("main: cd to a folder that doesn't exist yet", None, rp, "mkdir -p s && cd s && git checkout -b x", "no"),
+        ("main: git switch main", None, rp, "git switch main", "ok"),
+        ("main: git checkout -- file", None, rp, "git checkout -- a.txt", "ok"),
+        ("main: git checkout . (restore files)", None, rp, "git checkout .", "ok"),
+        ("main: git status && git pull", None, rp, "git status && git pull", "ok"),
+        ("worktree: git switch -c y", None, wt, "git switch -c y", "ok"),
+        ("worktree: cd to a new folder && git switch -c y", None, wt, "mkdir -p n && cd n && git switch -c y", "ok"),
+        ("worktree: git -C <main> switch x", None, wt, f"git -C {rp} switch x", "no"),
+        ("worktree: cd <main> && git checkout x", None, wt, f"cd {rp} && git checkout x", "no"),
+        ("worktree: git -C <main> pull", None, wt, f"git -C {rp} pull", "ok"),
+        ("implementer in its worktree: git switch -c y", I, wt, "git switch -c y", "ok"),
+        ("implementer: git -C <main> checkout -b x", I, wt, f"git -C {rp} checkout -b x", "no"),
+        ("another repo's main checkout: git -C <other> switch -c x", None, rp, f"git -C {other} switch -c x", "ok"),
+        ("another repo's main checkout: cd <other> && git checkout -b x", None, wt,
+         f"cd {other} && git checkout -b x", "ok"),
+        ("implementer: another repo's main checkout", I, wt, f"git -C {other} switch -c x", "ok"),
+    ]
+
+
+def main_payload(agent, cwd, cmd):
+    d = {"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": cwd, "session_id": "selftest"}
+    if agent:
+        d.update(agent_type=agent, agent_id="a1")
+    return d
+
+
 def main():
     a = sys.argv
     if "--corpus" in a:
@@ -383,7 +460,7 @@ def main():
 
     # 1) Cases against the real guard, by subprocess.
     for desc, agent, tool, inp, expected in CASES:
-        code, err = run_hook(payload(agent, tool, inp, root), root)
+        code, err = run_hook(payload(agent, tool, inp, root), root, main_rule=False)
         got = {0: "ok", 2: "no"}.get(code, f"exit {code}")
         who = "main" if agent is None else (agent or "no agent_type")
         good = got == expected
@@ -401,12 +478,33 @@ def main():
         ("broken permissions.json: subagent", broken, I, 2),
         ("broken permissions.json: main session", broken, None, 0),
     ]:
-        code, _ = run_hook(payload(agent, "Bash", {"command": "ls"}, root), root, perms)
+        code, _ = run_hook(payload(agent, "Bash", {"command": "ls"}, root), root, perms, main_rule=False)
         good = code == expected
         fails += not good
         if verbose or not good:
             print(f"{'ok ' if good else 'BAD'} {desc}: expected exit {expected}, got {code}")
     print(f"Cases: {len(CASES) + 3 - fails}/{len(CASES) + 3} right.")
+
+    # 2b) This project's MAIN checkout never leaves the main branch, for anyone (the main session
+    # too: it was one that crossed another chat). Throwaway repos; the root is `rp`.
+    rp, wt, other, trunk = main_checkout_repos(tmp)
+    main_cases = main_checkout_cases(rp, wt, other)
+    # The main branch's name comes from MAIN_BRANCH (SDD_MAIN_BRANCH overrides it): with `trunk`,
+    # going to trunk is fine and going to main leaves it.
+    trunk_cases = [("MAIN_BRANCH=trunk: git switch trunk", None, trunk, "git switch trunk", "ok"),
+                   ("MAIN_BRANCH=trunk: git switch main", None, trunk, "git switch main", "no")]
+    before = fails
+    for (desc, agent, cwd, cmd, expected), proj, env in (
+            [(c, rp, None) for c in main_cases] + [(c, trunk, {"SDD_MAIN_BRANCH": "trunk"}) for c in trunk_cases]):
+        code, err = run_hook(main_payload(agent, cwd, cmd), proj, env=env)
+        got = {0: "ok", 2: "no"}.get(code, f"exit {code}")
+        good = got == expected
+        fails += not good
+        if verbose or not good:
+            print(f"{'ok ' if good else 'BAD'} [main checkout] {desc}: expected {expected}, got {got}"
+                  f"{(' · ' + err) if err and not good else ''}")
+    n_main = len(main_cases) + len(trunk_cases)
+    print(f"Main checkout: {n_main - (fails - before)}/{n_main} right.")
 
     # 3) Mutation: removing any rule must change some case.
     if mutate:
@@ -417,7 +515,8 @@ def main():
             return 1
 
         def results(perms):
-            return [g.decide(payload(ag, t, i, root), perms, root) is None for _, ag, t, i, _ in CASES]
+            return [g.decide(payload(ag, t, i, root), perms, root, main_rule=False) is None
+                    for _, ag, t, i, _ in CASES]
 
         ref = results(base)
         if ref != [e == "ok" for *_, e in CASES]:
@@ -439,6 +538,55 @@ def main():
             print(f"BAD mutation: removing rule «{i}» changes no case (add one that tests it).")
         fails += len(untested)
         print(f"Mutation: {len(ids) - len(untested)}/{len(ids)} rules change some case when removed.")
+
+        # Roles of a shared rule (reviewer-* also lists reader): dropping one must change a case,
+        # otherwise that role's read-only rule has no test.
+        shared, role_untested = [], []
+        for k, r in enumerate(base["commands"]):
+            who = r.get("roles", [])
+            for role in (who if len(who) > 1 else []):
+                shared.append(role)
+                perms = copy.deepcopy(base)
+                perms["commands"][k]["roles"] = [x for x in who if x != role]
+                if results(perms) == ref:
+                    role_untested.append(f"{r['id']} without {role}")
+        for i in role_untested:
+            print(f"BAD role mutation: «{i}» changes no case (add a case for that role).")
+        fails += len(role_untested)
+        print(f"Role mutation: {len(shared) - len(role_untested)}/{len(shared)} roles of shared rules "
+              "change some case when removed.")
+
+        # The main-checkout rule: removed, judging ANY repo's main checkout (the bug of the
+        # first version), or not climbing from a folder that doesn't exist yet → a case breaks.
+        def main_results():
+            return [g.decide(main_payload(ag, cwd, cmd), base, rp) is None for _, ag, cwd, cmd, _ in main_cases]
+
+        expected_main = [e == "ok" for *_, e in main_cases]
+        orig_rule, orig_is_main = g.main_checkout_off_main, g.is_main_checkout
+
+        def any_repo(folder):
+            while not os.path.isdir(folder) and os.path.dirname(folder) != folder:
+                folder = os.path.dirname(folder)
+            top = g.git("rev-parse", "--show-toplevel", cwd=folder)
+            common = g.git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=folder)
+            return bool(top and common) and os.path.realpath(top) == os.path.realpath(os.path.dirname(common.rstrip("/")))
+
+        def no_climb(folder):
+            top = g.git("rev-parse", "--show-toplevel", cwd=folder)
+            return bool(top) and os.path.realpath(top) == g.main_checkout(g.CTX["root"])
+
+        if main_results() != expected_main:
+            print("BAD the in-process main-checkout rule doesn't match its cases.")
+            fails += 1
+        for name, rule, is_main in (("rule removed", lambda line: None, orig_is_main),
+                                    ("any repo's main checkout", orig_rule, any_repo),
+                                    ("no climb to an existing parent", orig_rule, no_climb)):
+            g.main_checkout_off_main, g.is_main_checkout = rule, is_main
+            if main_results() == expected_main:
+                print(f"BAD main-checkout mutation «{name}»: no case changes (add one that tests it).")
+                fails += 1
+            g.main_checkout_off_main, g.is_main_checkout = orig_rule, orig_is_main
+        print("Main-checkout mutation: 3 variants checked.")
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("OK" if not fails else f"FAIL: {fails} problem(s).")

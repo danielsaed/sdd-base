@@ -2,7 +2,8 @@
 """Stop: won't let the turn end while a workflow step is being skipped.
 
 It only blocks states that are a SURE omission, not "work in progress":
-  1. uncommitted changes on the main branch (everything goes through a branch + PR);
+  1. uncommitted changes on the main branch (everything goes through a branch + PR, in a
+     feature folder: the main checkout never leaves the main branch);
   2. a VERIFIED spec (step 4 ticked) whose docs aren't closed (step 5): closing doesn't
      need the user, so stopping there is leaving it half done. The notice carries the
      close ritual (new user preferences → AGENTS.md, pending work → BACKLOG.md): a hook
@@ -33,7 +34,10 @@ if git("branch", "--show-current") == MAIN_BRANCH:
     dirty = git("status", "--porcelain")
     if dirty:
         reasons.append(f"UNCOMMITTED changes on {MAIN_BRANCH}:\n" + dirty[:400]
-                       + "\n→ move them to a feat/<area>-<slug> (or docs/<topic>) branch (git switch -c) and open a PR.")
+                       + "\n→ move them to your feature folder (scripts/worktree.sh <area>-<slug> or docs-<topic>;"
+                       + f" the main checkout never leaves {MAIN_BRANCH}: the guard blocks it), e.g."
+                       + " `git diff | git -C .worktrees/<name> apply` (new files: copy them),"
+                       + f" then clean {MAIN_BRANCH} and open a PR.")
 
 for sid, where, checks, branch in open_specs():
     if len(checks) >= 5 and checks[3] and not checks[4]:
