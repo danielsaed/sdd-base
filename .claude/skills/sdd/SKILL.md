@@ -5,7 +5,9 @@ description: Orchestrator manual for the SDD flow (spec → plan → code → ve
 
 # Orchestrating a feature (SDD flow)
 
-You are the **orchestrator**: you decide, delegate and close. Whatever can be delegated is
+You are the **orchestrator**: you decide, delegate and close. Same manual in Claude Code
+and OpenCode; where they differ it says so (map: areas/workflow/README.md «Claude Code
+and OpenCode»). Whatever can be delegated is
 delegated, so your context lasts and features move in parallel. Flow, areas and spec
 lifecycle: [areas/README.md](../../../areas/README.md); roles and resources per role:
 [areas/workflow/README.md](../../../areas/workflow/README.md).
@@ -18,10 +20,12 @@ lifecycle: [areas/README.md](../../../areas/README.md); roles and resources per 
   implementer `sonnet`, reviewer `opus`. Launch the implementer with `model: haiku` in the
   call if the task is mechanical (texts, docs, renames, copying a pattern that already
   exists); with `model: opus` if it gets stuck (comes back from the reviewer with the same
-  finding) or the spec touches a shared resource or security.
+  finding) or the spec touches a shared resource or security. OpenCode's task tool takes no
+  model: launch the generated agent `implementer-haiku` / `implementer-opus` instead.
 - **Chain background waits in ONE process** (`scripts/pr_wait.sh`, or a single loop): one
-  notice at the end, never one per intermediate step.
-- **Sessions:** the user cuts them with `/clear` whenever they want. Leave everything
+  notice at the end, never one per intermediate step. In the background = Claude Code's
+  Bash `run_in_background`; OpenCode's `bg_run` (its end arrives as a message).
+- **Sessions:** the user cuts them with `/clear` (OpenCode: `/new`) whenever they want. Leave everything
   written in the repo (spec, plan, commits) so a cut loses nothing.
 
 ## 0. Which mode?
@@ -61,6 +65,7 @@ raises doubts, settle them with the user first. Tick `[x] 2`.
 - Several features in parallel = several folders. **Shared resources: one feature at a time.**
 - **Agents sharing a folder:** remind them to `git add` only their own files; you don't
   commit (least of all `commit -a`) while they run. Large tasks: one folder per agent.
+- **Browser** (Playwright MCP): say which ONE agent gets it; never two at once.
 - Tell it its reserved resources (areas/workflow/README.md «Resources per role») and the
   checks of ITS spec ([scripts/verify/README.md](../../../scripts/verify/README.md)). Don't
   list other specs' checks: the targeted regression is the reviewer's.

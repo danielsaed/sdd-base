@@ -13,6 +13,13 @@
 # not the project's.
 .playwright-mcp/
 
+# OpenCode installs its plugin dependency (@opencode-ai/plugin) in .opencode/ on start.
+.opencode/node_modules/
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+.opencode/.gitignore
+
 # Dependencies / caches
 node_modules/
 __pycache__/

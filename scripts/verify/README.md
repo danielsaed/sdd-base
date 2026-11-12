@@ -59,6 +59,19 @@ and repeated builds, not by the code.
   the commit production serves — short sha of 7+ ok, any case; the fallback when the host
   doesn't create GitHub deployments; its rc 2 = no credentials → exit 3).
 
+- **`opencode_selftest.mjs`** — the OpenCode adapter (`.opencode/plugins/sdd.js`) with a fake
+  client in a throwaway repo: guard per role (bash/edit/write/apply_patch, `workdir`, model
+  variants, unknown parent = subagent), reminder only in the main session, closeout once per
+  turn; built-in mutation (8 mutants). Runs in CI. `node scripts/verify/opencode_selftest.mjs [-v]`
+- **`opencode_e2e.mjs`** — the REAL `opencode` binary driven by a scripted fake model: guard
+  blocks (main + reader), reminder, closeout notice, `bg_run` notice, per-agent tool and
+  browser allowlists. Not in CI (needs `opencode` + npm). After upgrading OpenCode or
+  touching the plugin/generator/agents. `node scripts/verify/opencode_e2e.mjs [-v]`
+- **`../sync-opencode.mjs`** — generates OpenCode's agents and `opencode.json` from
+  `.claude/agents`, `.claude/settings.json` and `.mcp.json`. `--check` in CI (exit 1 if stale).
+- **`../setup.sh`** — prerequisites, the CLIs (`--cli`), the Playwright MCP's browser
+  (`--with-deps` on Linux) and the OpenCode sync. `scripts/setup.sh [--check]`.
+
 ## TODO: your project's checks
 One entry per script, grouped by area (output, data, performance, security…):
 - **`name.ext`** — what it measures (one line). When to use it.

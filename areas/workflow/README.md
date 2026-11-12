@@ -1,7 +1,8 @@
 # Workflow
 
 > **Answers:** who may do what (roles, the permission guard), which resources each role
-> reserves, and how feature folders share files. **Update when:** a role, a permission,
+> reserves, how feature folders share files, and how Claude Code and OpenCode run the same
+> workflow. **Update when:** a role, a permission,
 > a reserved resource or a hook changes. The flow itself: [../README.md](../README.md).
 
 ## How it works
@@ -18,7 +19,8 @@
 
 Each agent's `model:` header sets its default; the orchestrator may pass `model: haiku`
 (mechanical task: texts, docs, renames, copying an existing pattern) or `model: opus`
-(delicate task, implementer stuck) on the call.
+(delicate task, implementer stuck) on the call — in OpenCode, whose task tool takes no
+model, it launches the generated `implementer-haiku` / `implementer-opus` instead.
 
 Permissions are enforced, not just written: each agent's `tools:` (`.claude/agents/`),
 the `deny` rules in `.claude/settings.json` and the `agent_guard.py` hook, which reads
@@ -33,8 +35,9 @@ anything inside a worktree stay allowed; other repos aren't affected. A branch =
 (`scripts/worktree.sh`). `main` means `MAIN_BRANCH`, whose one home is the CUSTOMIZE block
 of `scripts/worktree.sh` (the hooks read it from there).
 
-Hooks: `reminder.py` re-injects each open spec's step on every message, trimmed to stay
-under 600 characters (the rest of the rules live in the skill `sdd`), and shows a ⚠ when
+Hooks (in OpenCode, run by `.opencode/plugins/sdd.js`: «Claude Code and OpenCode» below):
+`reminder.py` re-injects each open spec's step on every message, trimmed to stay under 600
+characters (the rest of the rules live in the skill `sdd`), and shows a ⚠ when
 the main checkout is on another branch (also seen from a worktree); `closeout.py` won't
 let a turn end on a skipped step or an incomplete close, and recalls the close ritual (new
 user preferences → `AGENTS.md`, pending → `BACKLOG.md`); both read `sdd_state.py`.
@@ -58,22 +61,18 @@ Each role gets reserved resources so nobody steps on anyone; stop yours by its r
 
 `P` comes from a stable hash of the folder name (`scripts/worktree.sh`, `BASE_PORT`).
 
-### Browser per agent (optional)
-If agents drive a browser, one shared browser MCP gets stepped on by parallel agents.
-Option: give the implementer and reviewer their own, started per invocation and closed at
-the end, in each agent's frontmatter (plus its tools in `tools:`, e.g.
-`mcp__browser__browser_navigate`, `…_snapshot`, `…_take_screenshot`, `…_close`):
-
-```yaml
-mcpServers:
-  - browser:
-      type: stdio
-      command: npx
-      args: ["@playwright/mcp@latest", "--isolated", "--headless"]   # in-memory profile, no window
-```
-
-Not enabled in the template (stack-agnostic). Without it: **never two agents with a
-browser at once**; for most checks a command-line request is enough.
+### Browser
+The **Playwright MCP** is a project server (`.mcp.json`, pinned version, `--headless
+--isolated --browser chromium`: no window, in-memory profile), generated into
+`opencode.json` (OpenCode starts it as is; Claude Code asks you once to approve it);
+`scripts/setup.sh` installs the exact Chromium its Playwright version needs. Who gets it:
+the orchestrator, the implementer and the reviewer (an allowlist of `browser_*` tools in
+`tools:`; no `browser_run_code_unsafe`, which runs code outside the page, nor
+`browser_file_upload`, which reads local files); planner and reader don't. **One browser per
+session**, shared by its agents: never two agents with it at once (the orchestrator says
+who); `browser_close` when done. For most checks a command-line request is enough. Remove
+`--headless` to watch it; another MCP server = one more entry in `.mcp.json`, then
+`node scripts/sync-opencode.mjs`.
 
 ### Shared files
 Shared files (secrets) are **linked** into each feature folder, not copied: a copy goes
@@ -81,11 +80,36 @@ stale as soon as a key rotates. Dependency folders are cloned. Both lists live i
 `CUSTOMIZE PER PROJECT` block of `scripts/worktree.sh` (also read by `scripts/baseline.sh`).
 What each check measures: [scripts/verify/README.md](../../scripts/verify/README.md).
 
+### Claude Code and OpenCode
+One workflow, two tools. What Claude Code reads is the **source**; OpenCode either reads it
+too or gets it from `scripts/sync-opencode.mjs` (generated files say so in their header;
+CI checks they're in sync) or from the adapter `.opencode/plugins/sdd.js`, which runs the
+same `.claude/hooks/*.py`:
+
+| Piece | Claude Code | OpenCode |
+|---|---|---|
+| context, skill `sdd` | `AGENTS.md`, `.claude/skills/` | the same files (read natively) |
+| agents | `.claude/agents/*.md` | `.opencode/agents/*.md`: generated; `tools:` → `permission:`, model alias → `MODELS` |
+| main session's deny rules | `.claude/settings.json` | `opencode.json` `permission`: generated |
+| MCP servers | `.mcp.json` | `opencode.json` `mcp`: generated |
+| guard (PreToolUse) | `agent_guard.py` | the plugin, on `tool.execute.before` (subagent = session with a parent) |
+| reminder (UserPromptSubmit) | `reminder.py` | the plugin: into the turn's system prompt |
+| closeout (Stop) | `closeout.py` | the plugin, on `session.idle`: the notice comes back as a message, once per turn |
+| background + notice | Bash `run_in_background` | tools `bg_run` (notice as a message) / `bg_check` |
+| new session | `/clear` | `/new` |
+
+Self-tests: `scripts/verify/opencode_selftest.mjs` (the adapter, CI) and
+`opencode_e2e.mjs` (the real binary with a fake model; after upgrading OpenCode).
+`SDD_PLUGIN_LOG=/tmp/sdd.log opencode` logs each decision of the plugin.
+
 ## Gotchas
 
 - **The guard, agents and hooks that apply are the main branch's.** A change made on a
   feature branch applies to everyone once merged; measure a branch's guard by running
   its hook by path (`guard_selftest.py` does).
+- **OpenCode doesn't hot-reload:** after `sync-opencode.mjs` or a plugin change, restart it.
+  It takes the project folder from `$PWD` (not the process cwd) and installs
+  `@opencode-ai/plugin` into `.opencode/` on start (without it, no `bg_run`/`bg_check`).
 - **Subagents start with their cwd at the main root**, so their relative paths point to
   the user's checkout, not to their folder: give them absolute paths or `cd .worktrees/<name>`.
 
